@@ -12,10 +12,9 @@ import DocumentUpload from "./StepperComponents/DocumentUpload";
 import { api } from "../../apiService";
 
 // Optional: centralize SharedService base (or keep your fixed IP if required)
-const OTP_BASE =
-  process.env.REACT_APP_SHARED_SERVICE_BASE ||
-  "http://10.128.1.227:8080/SharedService";
+const BASE_URL = process.env.REACT_APP_SHARED_SERVICE_BASE;
 
+const OTP_BASE = `${BASE_URL}/SharedService`;
 // ========= Helpers for tempId handling =========
 
 // Safely read from localStorage ("null" -> null)
