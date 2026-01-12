@@ -11,10 +11,10 @@ import { ConnectionDetails } from "../Forms/StepperComponents/ConnectionDetails"
 import DocumentUpload from "./StepperComponents/DocumentUpload";
 import { api } from "../../apiService";
 
-// Optional: centralize SharedService base (or keep your fixed IP if required)
+// Optional: centralize SharedService base
 const BASE_URL = process.env.REACT_APP_SHARED_SERVICE_BASE;
-
 const OTP_BASE = `${BASE_URL}/SharedService`;
+
 // ========= Helpers for tempId handling =========
 
 // Safely read from localStorage ("null" -> null)
@@ -24,10 +24,9 @@ const safeGet = (key) => {
 };
 
 // Recreate legacy id: "0" + (Number(tempId) - 1)
-// Handles strings with/without leading zeros.
 const buildLegacyTempId = (raw) => {
   if (!raw) return null;
-  const num = Number(String(raw).replace(/^0+/, "")); // strip leading zeros for parse
+  const num = Number(String(raw).replace(/^0+/, "")); // strip leading zeros
   if (Number.isNaN(num)) return null;
   return "0" + (num - 1);
 };
@@ -49,8 +48,6 @@ const resolveTempIdForPut = (location) => {
   return null;
 };
 
-// ==============================================
-
 const maskPhone = (phone) => {
   const digits = (phone || "").toString().replace(/\D/g, "");
   if (!digits) return "";
@@ -65,6 +62,9 @@ const NewCustomerStepper = () => {
   const history = useHistory();
   const [accountNumbers, setAccountNumbers] = useState([""]);
   const location = useLocation();
+
+  // ✅ NEW: keep tempId in state until OTP verified
+  const [draftTempId, setDraftTempId] = useState(null);
 
   // =========================
   // OTP state (modal overlay)
@@ -89,29 +89,7 @@ const NewCustomerStepper = () => {
     return () => clearInterval(id);
   }, [showOtpModal, otpTimer]);
 
-  // const sendOtp = async (mobileNo) => {
-  //   if (!mobileNo || String(mobileNo).trim().length < 9) {
-  //     alert("Please enter a valid mobile number before sending OTP.");
-  //     return false;
-  //   }
-  //   try {
-  //     setIsSendingOtp(true);
-  //     setOtp("");
-  //     setOtpError("");
-  //     await axios.post(`${OTP_BASE}/api/otp/sendOtp`, { mobileNo });
-  //     setShowOtpModal(true);
-  //     setOtpTimer(60);
-  //     return true;
-  //   } catch (error) {
-  //     console.error("sendOtp failed:", error);
-  //     alert("Failed to send OTP. Please try again.");
-  //     return false;
-  //   } finally {
-  //     setIsSendingOtp(false);
-  //   }
-  // };
-
-    const sendOtp = async (mobileNo) => {
+  const sendOtp = async (mobileNo) => {
     if (!mobileNo || String(mobileNo).trim().length < 9) {
       alert("Please enter a valid mobile number before sending OTP.");
       return false;
@@ -123,7 +101,7 @@ const NewCustomerStepper = () => {
 
       await axios.post(`${OTP_BASE}/api/otp/sendOtp`, {
         mobileNo,
-        systemName: "New Service Connection",   // <- controls the text in the SMS
+        systemName: "New Service Connection",
         systemCode: "CEB Info",
       });
 
@@ -139,7 +117,6 @@ const NewCustomerStepper = () => {
     }
   };
 
-
   const validateOtp = async (mobileNo, code) => {
     if (!code || code.length < 4) {
       setOtpError("Please enter the OTP.");
@@ -152,6 +129,7 @@ const NewCustomerStepper = () => {
         mobileNo,
         otp: code,
       });
+
       const data = res?.data;
       const ok =
         data === true ||
@@ -159,6 +137,7 @@ const NewCustomerStepper = () => {
         data?.valid === "Y" ||
         String(data?.status || "").toUpperCase() === "VERIFIED" ||
         String(data?.message || "").toLowerCase().includes("valid");
+
       if (!ok) {
         setOtpError("Invalid OTP. Please try again.");
         return false;
@@ -171,6 +150,18 @@ const NewCustomerStepper = () => {
     } finally {
       setIsVerifyingOtp(false);
     }
+  };
+
+  // ✅ Persist tempId ONLY AFTER OTP verification
+  const persistTempIdAfterOtp = () => {
+    if (!draftTempId) return;
+
+    localStorage.setItem("tempId", draftTempId);
+    const legacy = buildLegacyTempId(draftTempId);
+    if (legacy) localStorage.setItem("passingTempId", legacy);
+
+    // optional: clear draft state
+    // setDraftTempId(null);
   };
 
   // =========================
@@ -273,10 +264,10 @@ const NewCustomerStepper = () => {
     );
   };
 
-  // Fetch existing customer by ID (auto-search)
+  // Fetch existing customer by ID
   const fetchCustomerById = async (idNo) => {
     try {
-      const response = await api.get(`/applicants/findById/${idNo}`);//applicants/findById/${idNo}
+      const response = await api.get(`/applicants/findById/${idNo}`);
       if (response.data) {
         setCustomerExists(true);
         setCustomerDetails((prev) => ({
@@ -294,15 +285,6 @@ const NewCustomerStepper = () => {
     }
   };
 
-  // useEffect(() => {
-  //   const timer = setTimeout(() => {
-  //     if (customerDetails.idNo && String(customerDetails.idNo).length > 5) {
-  //       fetchCustomerById(customerDetails.idNo);
-  //     }
-  //   }, 500);
-  //   return () => clearTimeout(timer);
-  // }, [customerDetails.idNo]);
-
   // Progress / Completed tabs
   useEffect(() => {
     const requiredCustomerFields = [
@@ -318,13 +300,7 @@ const NewCustomerStepper = () => {
       "suburb",
     ];
     const requiredServiceFields = ["serviceStreetAddress", "serviceCity"];
-    const requiredConnectionFields = [
-      "phase",
-      "connectionType",
-      // If you don't actually capture these two, remove them:
-      // "customerCategory",
-      // "tariffCatCode",
-    ];
+    const requiredConnectionFields = ["phase", "connectionType"];
     const requiredContactFields = ["contactName", "contactMobile"];
     const requiredDocumentUploadFields = [
       "idCopy",
@@ -347,22 +323,19 @@ const NewCustomerStepper = () => {
     documentUpload,
   ]);
 
-  // ======== API helpers for step saves ========
-
-  // Generate server tempId and also compute/store the legacy id
+  // =========================
+  // TEMP ID generation
+  // =========================
+  // ✅ IMPORTANT: Do NOT store tempId to localStorage here anymore.
+  // Only keep it in draftTempId state. Persist after OTP verified.
   const generateTempId = async () => {
     try {
       const res = await api.get(
         `/online-applications/generate-tempId?mobile=${customerDetails.mobileNo}`,
         { responseType: "text" }
       );
-      const tempId = res.data; // e.g. "77240628025040"
-      localStorage.setItem("tempId", tempId);
-
-      // Ensure legacy id is available for PUTs (matches your old server behavior)
-      const legacy = buildLegacyTempId(tempId); // -> "077240628025039"
-      if (legacy) localStorage.setItem("passingTempId", legacy);
-
+      const tempId = res.data;
+      setDraftTempId(tempId);
       return tempId;
     } catch (e) {
       console.error("Error generating tempId:", e);
@@ -370,25 +343,23 @@ const NewCustomerStepper = () => {
     }
   };
 
+  // =========================
+  // API calls for step saves
+  // =========================
+
   // Customer Details (POST for new draft, PUT for existing draft)
   const postCustomerDetails = async () => {
     try {
       const params = new URLSearchParams(location.search);
       const tempIdFromUrl = params.get("tempId");
+
       const existingPassing = safeGet("passingTempId");
       const storedTempId = safeGet("tempId");
-
-      // Rebuild legacy id (what your backend expects for updates)
       const legacyId = buildLegacyTempId(storedTempId);
-
-      // Keep "passingTempId" in sync (mirrors your previous working flow)
-      if (legacyId) {
-        localStorage.setItem("passingTempId", legacyId);
-      }
 
       let response;
 
-      // NEW draft (no passing + no URL id) -> POST first
+      // NEW draft -> POST only (NO tempId generate here)
       if ((!existingPassing || existingPassing === "null") && !tempIdFromUrl) {
         const payload = {
           idNo: customerDetails.idNo,
@@ -406,21 +377,14 @@ const NewCustomerStepper = () => {
           preferredLanguage: customerDetails.preferredLanguage,
           personalCorporate: customerDetails.personalCorporate,
         };
-        response = await api.post(`/online-applications`, payload);
 
-        // make sure we have both tempId and passingTempId set for later PUTs
-        const tmp = await generateTempId();
-        if (!tmp) {
-          console.warn("tempId not generated; PUTs may fail until it is.");
-        }
+        response = await api.post(`/online-applications`, payload);
       } else {
-        // UPDATE existing draft -> PUT using URL tempId OR the legacy id we just computed
+        // UPDATE existing draft -> PUT
         const tempIdToUse =
           tempIdFromUrl || legacyId || existingPassing || resolveTempIdForPut(location);
 
-        if (!tempIdToUse) {
-          throw new Error("No tempId available for update.");
-        }
+        if (!tempIdToUse) throw new Error("No tempId available for update.");
 
         const payload = {
           tempId: tempIdToUse,
@@ -524,8 +488,12 @@ const NewCustomerStepper = () => {
 
     try {
       const payload = {
-        // Backend expects Boolean for phase in OnlineApplication
-        phase: connectionDetails.phase === 3 ? true : connectionDetails.phase === 1 ? false : undefined,
+        phase:
+          connectionDetails.phase === 3
+            ? true
+            : connectionDetails.phase === 1
+            ? false
+            : undefined,
         connectionType: connectionDetails.connectionType,
         usageElectricity: connectionDetails.usageElectricity,
         requestingTime: connectionDetails.requestingTime,
@@ -568,12 +536,9 @@ const NewCustomerStepper = () => {
     }
   };
 
-  // handleDocumentUpload removed: uploads are now part of the single multipart /application call
-
   // Submit: single multipart POST /application with JSON + files
   const handleSubmit = async () => {
     try {
-      // Prepare JSON payload for /application
       const formDataDto = {
         applicantDto: {
           idNo: customerDetails.idNo,
@@ -611,36 +576,42 @@ const NewCustomerStepper = () => {
           deptId: serviceLocationDetails.deptId,
           phase: connectionDetails.phase,
           connectionType: connectionDetails.connectionType,
-          customerCategory: connectionDetails.customerCategory, // include if captured
-          tariffCatCode: connectionDetails.tariffCatCode,       // include if captured
-          tariffCode: connectionDetails.tariffCode,             // include if captured
+          customerCategory: connectionDetails.customerCategory,
+          tariffCatCode: connectionDetails.tariffCatCode,
+          tariffCode: connectionDetails.tariffCode,
           customerType: serviceLocationDetails.customerType || "DOME",
         },
       };
-      // Resolve tempId used during the draft flow
+
       const tempIdToUse = resolveTempIdForPut(location);
       if (!tempIdToUse) {
         alert("Temporary ID not found. Please start the application again from step 1.");
         return;
       }
 
-      // Build multipart form: JSON blob + files + tempId
-  const multipart = new FormData();
-  const jsonBlob = new Blob([JSON.stringify(formDataDto)], { type: "application/json" });
-  // Must match @RequestPart("formData") on the server
-  multipart.append("formData", jsonBlob);
+      const multipart = new FormData();
+      const jsonBlob = new Blob([JSON.stringify(formDataDto)], {
+        type: "application/json",
+      });
+
+      multipart.append("formData", jsonBlob);
       multipart.append("tempId", tempIdToUse);
+
       if (documentUpload.idCopy) multipart.append("idCopy", documentUpload.idCopy);
-      if (documentUpload.ownershipCertificate) multipart.append("ownershipCertificate", documentUpload.ownershipCertificate);
-      if (documentUpload.gramaNiladhariCertificate) multipart.append("gramaNiladhariCertificate", documentUpload.gramaNiladhariCertificate);
+      if (documentUpload.ownershipCertificate)
+        multipart.append("ownershipCertificate", documentUpload.ownershipCertificate);
+      if (documentUpload.gramaNiladhariCertificate)
+        multipart.append("gramaNiladhariCertificate", documentUpload.gramaNiladhariCertificate);
       if (documentUpload.threephChartedEngineerCertificate)
-        multipart.append("threephChartedEngineerCertificate", documentUpload.threephChartedEngineerCertificate);
+        multipart.append(
+          "threephChartedEngineerCertificate",
+          documentUpload.threephChartedEngineerCertificate
+        );
 
       const appResponse = await api.post(`/application`, multipart, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // Extract reference number robustly
       const data = appResponse?.data;
       let refNo = null;
       if (data && typeof data === "object") {
@@ -648,13 +619,13 @@ const NewCustomerStepper = () => {
       } else if (typeof data === "string") {
         refNo = data;
       }
+
       if (!refNo) {
         console.error("No ref number in /application response:", data);
         alert("We couldn't get your reference number. Please try again.");
         return;
       }
 
-      // Store + navigate to success
       sessionStorage.setItem("lastApplicationNo", refNo);
       sessionStorage.setItem(
         "lastCustomerName",
@@ -663,13 +634,10 @@ const NewCustomerStepper = () => {
       alert(`Application submitted successfully! Ref: ${refNo}`);
       history.push("/success", {
         applicationNo: refNo,
-        customerName:
-          customerDetails.fullName || contactPersonDetails.contactName || "",
+        customerName: customerDetails.fullName || contactPersonDetails.contactName || "",
       });
     } catch (error) {
-      alert(
-        "Submission failed: " + (error?.response?.data?.error || error.message)
-      );
+      alert("Submission failed: " + (error?.response?.data?.error || error.message));
       console.error(error);
     }
   };
@@ -739,6 +707,7 @@ const NewCustomerStepper = () => {
         .get(`/online-applications/${tempId}`)
         .then((res) => {
           const data = res.data;
+
           setCustomerDetails({
             idNo: data.idNo || "",
             personalCorporate: data.personalCorporate || "",
@@ -755,6 +724,7 @@ const NewCustomerStepper = () => {
             email: data.email || "",
             preferredLanguage: data.preferredLanguage || "",
           });
+
           setContactPersonDetails({
             contactIdNo: data.contactIdNo || "",
             contactName: data.contactName || "",
@@ -764,6 +734,7 @@ const NewCustomerStepper = () => {
             contactEmail: data.contactEmail || "",
             deptId: data.deptId || "",
           });
+
           setServiceLocationDetails((prev) => ({
             ...prev,
             neighboursAccNo: data.neighboursAccNo || "",
@@ -778,21 +749,18 @@ const NewCustomerStepper = () => {
             longitude: data.longitude || "",
             latitude: data.latitude || "",
           }));
-          // Normalize types coming from backend so radios render correctly
+
           const normalizePhase = (rawPhase, rawConnType) => {
-            // Accept numbers, strings, booleans, or Y/N
             if (rawPhase === 3 || rawPhase === "3") return 3;
             if (rawPhase === 1 || rawPhase === "1") return 1;
-            if (rawPhase === true || rawPhase === "true" || rawPhase === "Y") return 3; // three-phase
-            if (rawPhase === false || rawPhase === "false" || rawPhase === "N") return 1; // single-phase
-            // Fallback inference: 60A implies 3ph
+            if (rawPhase === true || rawPhase === "true" || rawPhase === "Y") return 3;
+            if (rawPhase === false || rawPhase === "false" || rawPhase === "N") return 1;
             const nConn = Number(rawConnType);
             if (!Number.isNaN(nConn) && nConn === 60) return 3;
-            return ""; // unknown -> leave unselected
+            return "";
           };
 
           const normalizeConnType = (raw) => {
-            // Ensure it's a string '30' | '60' for the radio checks
             if (raw == null || raw === "") return "";
             const n = Number(raw);
             if (!Number.isNaN(n)) return String(n);
@@ -831,7 +799,7 @@ const NewCustomerStepper = () => {
   const handleNext = async () => {
     try {
       const params = new URLSearchParams(location.search);
-      const tempIdFromUrl = params.get("tempId"); // presence => Existing Application
+      const tempIdFromUrl = params.get("tempId"); // Existing Application
 
       if (activeTab === 0) {
         const missing = [];
@@ -853,26 +821,25 @@ const NewCustomerStepper = () => {
           return;
         }
 
+        // Save step 1 data
         await postCustomerDetails();
-
-        if (!tempIdFromUrl) {
-          const tmp = await generateTempId();
-          if (!tmp) {
-            alert("Could not generate a temporary ID. Try again.");
-            return;
-          }
-        }
 
         // 🔐 OTP for NEW application only
         if (!tempIdFromUrl) {
-          const sent = await sendOtp(customerDetails.mobileNo);
-          if (sent) {
-            return; // Wait until user verifies
+          // ✅ Generate tempId BUT DO NOT save in localStorage yet
+          const tmp = await generateTempId();
+          if (!tmp) {
+            alert("Could not generate a temporary ID. Try again.");
+            return; // ✅ stop here
           }
+
+          const sent = await sendOtp(customerDetails.mobileNo);
+          if (!sent) return; // ✅ do NOT go next if OTP send failed
+
+          return; // ✅ wait for OTP verification (modal)
         }
       } else if (activeTab === 1) {
         const missing = [];
-        // if (!serviceLocationDetails.assessmentNo) missing.push("Assessment No");
         if (!serviceLocationDetails.deptId) missing.push("Department");
         if (!serviceLocationDetails.serviceStreetAddress)
           missing.push("Service Street Address");
@@ -881,8 +848,6 @@ const NewCustomerStepper = () => {
         if (!serviceLocationDetails.ownership) missing.push("Ownership");
         if (!serviceLocationDetails.latitude) missing.push("Latitude");
         if (!serviceLocationDetails.longitude) missing.push("Longitude");
-        // if (!serviceLocationDetails.neighboursAccNo)
-        //   missing.push("Neighbour's Account No");
 
         if (missing.length > 0) {
           alert(
@@ -914,8 +879,6 @@ const NewCustomerStepper = () => {
         if (!contactPersonDetails.contactName) missing.push("Contact Name");
         if (!contactPersonDetails.contactIdNo) missing.push("Contact ID No");
         if (!contactPersonDetails.contactAddress) missing.push("Contact Address");
-        // if (!contactPersonDetails.contactTelephone)
-        //   missing.push("Contact Telephone");
         if (!contactPersonDetails.contactMobile) missing.push("Contact Mobile");
 
         if (missing.length > 0) {
@@ -942,6 +905,7 @@ const NewCustomerStepper = () => {
         }
       }
 
+      // ✅ normal next (not OTP waiting)
       setActiveTab((prev) => prev + 1);
     } catch (error) {
       console.error("Error during post operations:", error);
@@ -950,9 +914,7 @@ const NewCustomerStepper = () => {
   };
 
   const handlePrev = () => {
-    if (activeTab > 0) {
-      setActiveTab(activeTab - 1);
-    }
+    if (activeTab > 0) setActiveTab(activeTab - 1);
   };
 
   return (
@@ -1037,12 +999,19 @@ const NewCustomerStepper = () => {
                               setOtpError("");
                             }}
                             onKeyDown={async (e) => {
-                              if (e.key === "Enter" && otp.length >= 4 && !isVerifyingOtp) {
+                              if (
+                                e.key === "Enter" &&
+                                otp.length >= 4 &&
+                                !isVerifyingOtp
+                              ) {
                                 const ok = await validateOtp(
                                   customerDetails.mobileNo,
                                   otp
                                 );
                                 if (ok) {
+                                  // ✅ Save tempId only AFTER OTP verify
+                                  persistTempIdAfterOtp();
+
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -1068,6 +1037,9 @@ const NewCustomerStepper = () => {
                                   otp
                                 );
                                 if (ok) {
+                                  // ✅ Save tempId only AFTER OTP verify
+                                  persistTempIdAfterOtp();
+
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -1102,6 +1074,9 @@ const NewCustomerStepper = () => {
                                 setOtp("");
                                 setOtpError("");
                                 setOtpTimer(0);
+
+                                // ✅ Important: discard draft tempId on cancel
+                                setDraftTempId(null);
                               }}
                             >
                               Cancel

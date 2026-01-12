@@ -189,6 +189,7 @@ const ConnectionDetails = ({ formData, setFormData, customerData, accountNumbers
             <option value="WELD">Welding workshop</option>
             <option value="PUMP">Pumping Station</option>
             <option value="INDU">Industrial</option>
+            <option value="GOVT">Government</option>
           </select>
         </div>
 
@@ -278,41 +279,50 @@ const ConnectionDetails = ({ formData, setFormData, customerData, accountNumbers
 
       {/* Account numbers */}
       <div className="form-box-inner">
-        <div className="form-row">
-          <label className="form-label ">
-            Account numbers of other premises under the <br />
-            same applicant's name:
-          </label>
+  <div
+    className="form-row"
+    style={{ display: "flex", alignItems: "flex-start", gap: "16px" }}
+  >
+    <label
+      className="form-label"
+      style={{ minWidth: "320px", marginTop: "6px" }}
+    >
+      Account numbers of other premises under the <br />
+      same applicant&apos;s name:
+    </label>
 
-          <div className="space-y-4">
-            <div className="flex space-x-4">
-              {accountNumbers.map((number, index) => (
-                <div key={index} style={{ display: "flex", flexDirection: "column" }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={number}
-                    disabled={isDisabled(index)}
-                    onChange={(e) => handleChange(index, e.target.value)}
-                    onBlur={() => handleBlur(index)}
-                    // UX hints (don’t rely on HTML5 validation alone)
-                    maxLength={10}
-                    inputMode="numeric"
-                    pattern="\d{10}"
-                    title="Enter up to 10 digits"
-                  />
-                  {/* tiny inline error */}
-                  {errors[index] ? (
-                    <span style={{ color: "#cc0000", fontSize: 12, marginTop: 4 }}>
-                      {errors[index]}
-                    </span>
-                  ) : null}
-                </div>
-              ))}
+    <div style={{ flex: 1 }}>
+      <div className="space-y-4">
+        <div className="flex space-x-4" style={{ flexWrap: "wrap" }}>
+          {accountNumbers.map((number, index) => (
+            <div
+              key={index}
+              style={{ display: "flex", flexDirection: "column" }}
+            >
+              <input
+                type="text"
+                className="form-input"
+                value={number}
+                disabled={isDisabled(index)}
+                onChange={(e) => handleChange(index, e.target.value)}
+                onBlur={() => handleBlur(index)}
+                maxLength={10}
+                inputMode="numeric"
+                pattern="\d{10}"
+                title="Enter up to 10 digits"
+              />
+              {errors[index] ? (
+                <span style={{ color: "#cc0000", fontSize: 12, marginTop: 4 }}>
+                  {errors[index]}
+                </span>
+              ) : null}
             </div>
-          </div>
+          ))}
         </div>
       </div>
+    </div>
+  </div>
+</div>
     </div>
   );
 };

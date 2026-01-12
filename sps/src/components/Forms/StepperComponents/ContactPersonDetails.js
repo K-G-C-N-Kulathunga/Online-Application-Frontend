@@ -32,7 +32,7 @@ const ContactPersonDetails = ({
           .filter(Boolean)
           .join(", ");
 
-        setFormData({
+        const updatedFormData = {
           ...formData,
           contactIdNo: customerData.idNo,
           contactName: customerData.fullName,
@@ -40,18 +40,21 @@ const ContactPersonDetails = ({
           contactTelephone: customerData.telephoneNo,
           contactMobile: customerData.mobileNo,
           contactEmail: customerData.email,
-        });
+        };
 
-        setManualData({
+        const updatedManualData = {
           contactIdNo: customerData.idNo,
           contactName: customerData.fullName,
           contactAddress: fullAddress,
           contactTelephone: customerData.telephoneNo,
           contactMobile: customerData.mobileNo,
           contactEmail: customerData.email,
-        });
+        };
+
+        setFormData(updatedFormData);
+        setManualData(updatedManualData);
       } else {
-        setFormData({
+        const updatedFormData = {
           ...formData,
           contactIdNo: "",
           contactName: "",
@@ -59,20 +62,41 @@ const ContactPersonDetails = ({
           contactTelephone: "",
           contactMobile: "",
           contactEmail: "",
-        });
+        };
 
-        setManualData({
+        const updatedManualData = {
           contactIdNo: "",
           contactName: "",
           contactAddress: "",
           contactTelephone: "",
           contactMobile: "",
           contactEmail: "",
-        });
+        };
+
+        setFormData(updatedFormData);
+        setManualData(updatedManualData);
       }
 
       return newState;
     });
+  };
+
+  // Update manual data and form data when user types (only when not selected)
+  const handleManualChange = (field, value) => {
+    if (isSelected) return; // Prevent editing when checkbox is selected
+
+    const updatedManualData = {
+      ...manualData,
+      [field]: value,
+    };
+
+    const updatedFormData = {
+      ...formData,
+      [field]: value,
+    };
+
+    setManualData(updatedManualData);
+    setFormData(updatedFormData);
   };
 
   return (
@@ -87,6 +111,11 @@ const ContactPersonDetails = ({
             onChange={handleselect}
           />
           <span>Same as Customer Details</span>
+          {isSelected && (
+            <span style={{ marginLeft: "10px", color: "#666", fontSize: "14px" }}>
+              (Fields are locked)
+            </span>
+          )}
         </label>
       </div>
 
@@ -102,9 +131,9 @@ const ContactPersonDetails = ({
             name="contactIdNo"
             className="form-input"
             value={manualData.contactIdNo}
-            onChange={(e) =>
-              setManualData({ ...manualData, contactIdNo: e.target.value })
-            }
+            onChange={(e) => handleManualChange("contactIdNo", e.target.value)}
+            disabled={isSelected}
+            style={isSelected ? { backgroundColor: "#f5f5f5", cursor: "not-allowed" } : {}}
           />
         </div>
         <div className="form-group">
@@ -117,9 +146,9 @@ const ContactPersonDetails = ({
             name="contactName"
             className="form-input"
             value={manualData.contactName}
-            onChange={(e) =>
-              setManualData({ ...manualData, contactName: e.target.value })
-            }
+            onChange={(e) => handleManualChange("contactName", e.target.value)}
+            disabled={isSelected}
+            style={isSelected ? { backgroundColor: "#f5f5f5", cursor: "not-allowed" } : {}}
           />
         </div>
       </div>
@@ -136,9 +165,9 @@ const ContactPersonDetails = ({
             name="contactAddress"
             className="form-input"
             value={manualData.contactAddress}
-            onChange={(e) =>
-              setManualData({ ...manualData, contactAddress: e.target.value })
-            }
+            onChange={(e) => handleManualChange("contactAddress", e.target.value)}
+            disabled={isSelected}
+            style={isSelected ? { backgroundColor: "#f5f5f5", cursor: "not-allowed" } : {}}
           />
         </div>
         <div className="form-group">
@@ -151,9 +180,9 @@ const ContactPersonDetails = ({
             name="contactEmail"
             className="form-input"
             value={manualData.contactEmail}
-            onChange={(e) =>
-              setManualData({ ...manualData, contactEmail: e.target.value })
-            }
+            onChange={(e) => handleManualChange("contactEmail", e.target.value)}
+            disabled={isSelected}
+            style={isSelected ? { backgroundColor: "#f5f5f5", cursor: "not-allowed" } : {}}
           />
         </div>
       </div>
@@ -170,12 +199,9 @@ const ContactPersonDetails = ({
             name="contactTelephone"
             className="form-input"
             value={manualData.contactTelephone}
-            onChange={(e) =>
-              setManualData({
-                ...manualData,
-                contactTelephone: e.target.value,
-              })
-            }
+            onChange={(e) => handleManualChange("contactTelephone", e.target.value)}
+            disabled={isSelected}
+            style={isSelected ? { backgroundColor: "#f5f5f5", cursor: "not-allowed" } : {}}
           />
         </div>
         <div className="form-group">
@@ -188,9 +214,9 @@ const ContactPersonDetails = ({
             name="contactMobile"
             className="form-input"
             value={manualData.contactMobile}
-            onChange={(e) =>
-              setManualData({ ...manualData, contactMobile: e.target.value })
-            }
+            onChange={(e) => handleManualChange("contactMobile", e.target.value)}
+            disabled={isSelected}
+            style={isSelected ? { backgroundColor: "#f5f5f5", cursor: "not-allowed" } : {}}
           />
         </div>
       </div>

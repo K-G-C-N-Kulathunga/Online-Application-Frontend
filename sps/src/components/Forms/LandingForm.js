@@ -150,7 +150,7 @@ export default function LandingForm() {
         // Do not navigate yet.
       } catch (err) {
         console.error("Failed to load application for OTP:", err);
-        alert("Invalid Temporary Application ID or server error.");
+        alert("Invalid Temporary Application ID.");
       }
       return;
     }

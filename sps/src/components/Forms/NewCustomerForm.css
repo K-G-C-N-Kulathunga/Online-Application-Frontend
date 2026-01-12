@@ -525,3 +525,47 @@
 .full-lading-page-option{
   margin-right: 11rem;
 }
+
+/* CSS for account number alignment */
+.account-numbers-section {
+  width: 100%;
+}
+
+.account-numbers-header {
+  margin-bottom: 16px;
+}
+
+.account-numbers-inputs-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.account-numbers-labels-row {
+  display: flex;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.account-numbers-inputs-row {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.account-number-input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Alternative simpler CSS if you prefer inline styles */
+.form-box-inner .form-label {
+  display: block;
+  margin-bottom: 16px;
+}
+
+/* Or even simpler - just modify the existing structure */
+.account-numbers-inputs-row .form-input {
+  width: 100%;
+  box-sizing: border-box;
+}
