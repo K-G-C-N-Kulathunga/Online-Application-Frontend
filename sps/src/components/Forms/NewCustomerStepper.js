@@ -76,6 +76,8 @@ const NewCustomerStepper = () => {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpTimer, setOtpTimer] = useState(0);
   const otpInputRef = useRef(null);
+  const [agreed, setAgreed] = useState(false);
+  const [agreementError, setAgreementError] = useState(""); 
 
   useEffect(() => {
     if (showOtpModal && otpInputRef.current) {
@@ -539,6 +541,10 @@ const NewCustomerStepper = () => {
   // Submit: single multipart POST /application with JSON + files
   const handleSubmit = async () => {
     try {
+      if (!agreed) {
+      setAgreementError("You must agree before submitting the application.");
+      return;
+    }
       const formDataDto = {
         applicantDto: {
           idNo: customerDetails.idNo,
@@ -632,10 +638,11 @@ const NewCustomerStepper = () => {
         customerDetails.fullName || contactPersonDetails.contactName || ""
       );
       alert(`Application submitted successfully! Ref: ${refNo}`);
-      history.push("/success", {
+      history.replace("/success", {
         applicationNo: refNo,
         customerName: customerDetails.fullName || contactPersonDetails.contactName || "",
       });
+
     } catch (error) {
       alert("Submission failed: " + (error?.response?.data?.error || error.message));
       console.error(error);
@@ -692,6 +699,8 @@ const NewCustomerStepper = () => {
         <DocumentUpload
           formData={documentUpload}
           handleChange={handleDocumentUploadChange}
+          agreed={agreed}
+          setAgreed={setAgreed}
         />
       ),
     },
