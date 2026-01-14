@@ -66,6 +66,11 @@ const NewCustomerStepper = () => {
   // ✅ NEW: keep tempId in state until OTP verified
   const [draftTempId, setDraftTempId] = useState(null);
 
+  // ✅ NEW: OTP should be required only once (for NEW application)
+  const [otpVerified, setOtpVerified] = useState(() => {
+    return sessionStorage.getItem("otpVerified") === "true";
+  });
+
   // =========================
   // OTP state (modal overlay)
   // =========================
@@ -76,8 +81,6 @@ const NewCustomerStepper = () => {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpTimer, setOtpTimer] = useState(0);
   const otpInputRef = useRef(null);
-  const [agreed, setAgreed] = useState(false);
-  const [agreementError, setAgreementError] = useState(""); 
 
   useEffect(() => {
     if (showOtpModal && otpInputRef.current) {
@@ -162,8 +165,9 @@ const NewCustomerStepper = () => {
     const legacy = buildLegacyTempId(draftTempId);
     if (legacy) localStorage.setItem("passingTempId", legacy);
 
-    // optional: clear draft state
-    // setDraftTempId(null);
+    // ✅ mark OTP as verified (so it will NOT be asked again)
+    setOtpVerified(true);
+    sessionStorage.setItem("otpVerified", "true");
   };
 
   // =========================
@@ -222,7 +226,7 @@ const NewCustomerStepper = () => {
   });
 
   const [documentUpload, setDocumentUpload] = useState({
-    idCopy: null,
+    idCopy: "",
     ownershipCertificate: "",
     gramaNiladhariCertificate: "",
     threephChartedEngineerCertificate: "",
@@ -541,10 +545,6 @@ const NewCustomerStepper = () => {
   // Submit: single multipart POST /application with JSON + files
   const handleSubmit = async () => {
     try {
-      if (!agreed) {
-      setAgreementError("You must agree before submitting the application.");
-      return;
-    }
       const formDataDto = {
         applicantDto: {
           idNo: customerDetails.idNo,
@@ -638,11 +638,10 @@ const NewCustomerStepper = () => {
         customerDetails.fullName || contactPersonDetails.contactName || ""
       );
       alert(`Application submitted successfully! Ref: ${refNo}`);
-      history.replace("/success", {
+      history.push("/success", {
         applicationNo: refNo,
         customerName: customerDetails.fullName || contactPersonDetails.contactName || "",
       });
-
     } catch (error) {
       alert("Submission failed: " + (error?.response?.data?.error || error.message));
       console.error(error);
@@ -699,8 +698,6 @@ const NewCustomerStepper = () => {
         <DocumentUpload
           formData={documentUpload}
           handleChange={handleDocumentUploadChange}
-          agreed={agreed}
-          setAgreed={setAgreed}
         />
       ),
     },
@@ -712,6 +709,11 @@ const NewCustomerStepper = () => {
     const tempId = params.get("tempId");
     if (tempId) {
       localStorage.setItem("passingTempId", tempId);
+
+      // ✅ Existing application should NOT require OTP
+      setOtpVerified(true);
+      sessionStorage.setItem("otpVerified", "true");
+
       api
         .get(`/online-applications/${tempId}`)
         .then((res) => {
@@ -830,23 +832,25 @@ const NewCustomerStepper = () => {
           return;
         }
 
-        // Save step 1 data
         await postCustomerDetails();
 
-        // 🔐 OTP for NEW application only
-        if (!tempIdFromUrl) {
-          // ✅ Generate tempId BUT DO NOT save in localStorage yet
-          const tmp = await generateTempId();
-          if (!tmp) {
-            alert("Could not generate a temporary ID. Try again.");
-            return; // ✅ stop here
-          }
-
-          const sent = await sendOtp(customerDetails.mobileNo);
-          if (!sent) return; // ✅ do NOT go next if OTP send failed
-
-          return; // ✅ wait for OTP verification (modal)
+        // ✅ If existing app OR OTP already verified, move to next without OTP
+        if (tempIdFromUrl || otpVerified) {
+          setActiveTab((prev) => prev + 1);
+          return;
         }
+
+        // 🔐 OTP only once for NEW application
+        const tmp = await generateTempId();
+        if (!tmp) {
+          alert("Could not generate a temporary ID. Try again.");
+          return;
+        }
+
+        const sent = await sendOtp(customerDetails.mobileNo);
+        if (!sent) return;
+
+        return; // wait for OTP verification (modal)
       } else if (activeTab === 1) {
         const missing = [];
         if (!serviceLocationDetails.deptId) missing.push("Department");
@@ -914,7 +918,6 @@ const NewCustomerStepper = () => {
         }
       }
 
-      // ✅ normal next (not OTP waiting)
       setActiveTab((prev) => prev + 1);
     } catch (error) {
       console.error("Error during post operations:", error);
@@ -979,7 +982,6 @@ const NewCustomerStepper = () => {
                         setFormData={setConnectionDetails}
                         accountNumbers={accountNumbers}
                         setAccountNumbers={setAccountNumbers}
-                        serviceArea={serviceLocationDetails.area}
                       />
                     ) : activeTab === 1 ? (
                       <ServiceLocationDetails
@@ -1019,9 +1021,7 @@ const NewCustomerStepper = () => {
                                   otp
                                 );
                                 if (ok) {
-                                  // ✅ Save tempId only AFTER OTP verify
                                   persistTempIdAfterOtp();
-
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -1047,9 +1047,7 @@ const NewCustomerStepper = () => {
                                   otp
                                 );
                                 if (ok) {
-                                  // ✅ Save tempId only AFTER OTP verify
                                   persistTempIdAfterOtp();
-
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -1084,8 +1082,6 @@ const NewCustomerStepper = () => {
                                 setOtp("");
                                 setOtpError("");
                                 setOtpTimer(0);
-
-                                // ✅ Important: discard draft tempId on cancel
                                 setDraftTempId(null);
                               }}
                             >
