@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { api } from "../../../apiService";
 
-const ConnectionDetails = ({ formData, setFormData, customerData, accountNumbers, setAccountNumbers }) => {
+const ConnectionDetails = ({ formData, setFormData, customerData, accountNumbers, setAccountNumbers, serviceArea }) => {
   const idNo = customerData?.idNo;
-  const disabledAreas = ['Colombo East', 'Colombo North', 'Colombo West', 'Colombo South'];
+  const disabledAreas = ['COLOMBO NORTH', 'COLOMBO EAST', 'COLOMBO WEST', 'COLOMBO SOUTH'];
 
   // --- NEW: inline error messages per input ---
   const [errors, setErrors] = useState(["", "", "", ""]);
@@ -147,7 +147,7 @@ const ConnectionDetails = ({ formData, setFormData, customerData, accountNumbers
                 value="15"
                 className="radio-input"
                 checked={formData.connectionType === "15"}
-                disabled={disabledAreas.includes(formData.area)}
+                disabled={!disabledAreas.includes(serviceArea)}
                 onChange={(e) => setFormData({ ...formData, connectionType: e.target.value })}
               />
               <label htmlFor="15" className="radio-label">15A</label>
