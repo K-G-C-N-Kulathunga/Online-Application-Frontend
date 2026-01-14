@@ -3,6 +3,7 @@ import { api } from "../../../apiService";
 
 const ConnectionDetails = ({ formData, setFormData, customerData, accountNumbers, setAccountNumbers }) => {
   const idNo = customerData?.idNo;
+  const disabledAreas = ['Colombo East', 'Colombo North', 'Colombo West', 'Colombo South'];
 
   // --- NEW: inline error messages per input ---
   const [errors, setErrors] = useState(["", "", "", ""]);
@@ -141,6 +142,19 @@ const ConnectionDetails = ({ formData, setFormData, customerData, accountNumbers
             <div className="radio-option">
               <input
                 type="radio"
+                id="15"
+                name="connectionType"
+                value="15"
+                className="radio-input"
+                checked={formData.connectionType === "15"}
+                disabled={disabledAreas.includes(formData.area)}
+                onChange={(e) => setFormData({ ...formData, connectionType: e.target.value })}
+              />
+              <label htmlFor="15" className="radio-label">15A</label>
+            </div>
+            <div className="radio-option">
+              <input
+                type="radio"
                 id="30"
                 name="connectionType"
                 value="30"
@@ -189,12 +203,11 @@ const ConnectionDetails = ({ formData, setFormData, customerData, accountNumbers
             <option value="WELD">Welding workshop</option>
             <option value="PUMP">Pumping Station</option>
             <option value="INDU">Industrial</option>
-            <option value="GOVT">Government</option>
           </select>
         </div>
 
         <div className="form-group">
-          <label className="form-label required">Requesting time of usage tarif?</label>
+          <label className="form-label required">Requesting time of use tariff?</label>
           <div className="radio-group">
             <div className="radio-option">
               <input
