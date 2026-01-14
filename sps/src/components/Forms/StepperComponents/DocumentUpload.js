@@ -1,8 +1,7 @@
 import React, { useState } from "react";
 
-const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE_MB = 2;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-const MAX_NOTES_LENGTH = 300;
 
 const DocumentUpload = ({ formData, handleChange,agreed, setAgreed }) => {
   const [errors, setErrors] = useState({});
@@ -17,7 +16,7 @@ const DocumentUpload = ({ formData, handleChange,agreed, setAgreed }) => {
     if (file.size > MAX_FILE_SIZE_BYTES) {
       setErrors((prev) => ({
         ...prev,
-        [name]: `File size must not exceed ${MAX_FILE_SIZE_MB} mb`,
+        [name]: `File size must not exceed ${MAX_FILE_SIZE_MB} MB`,
       }));
       e.target.value = "";
       return;
@@ -31,7 +30,8 @@ const DocumentUpload = ({ formData, handleChange,agreed, setAgreed }) => {
     <div className="form-box">
       {/* ID Copy */}
       <div className="mb-4 flex items-center justify-between gap-4">
-        <label className="form-label required w-1/2">ID Copy</label>
+        <label className="form-label required w-1/2">Copy of the National Identity Card / Passport / Driving License / <br/>Business Registration certificate of the New Tariff
+Customer <br/>or any other supporting document.</label>
         <div className="w-1/2">
           <input
             type="file"
@@ -48,7 +48,9 @@ const DocumentUpload = ({ formData, handleChange,agreed, setAgreed }) => {
       {/* Ownership Certificate */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <label className="form-label required w-1/2">
-          Ownership Certificate
+          A document proving ownership / Occupancy <br/>
+          (Deed / Assessment notice / Certificate of Ownership / <br/>Registered Lease /
+Rental Agreement)
         </label>
         <div className="w-1/2">
           <input
@@ -68,7 +70,9 @@ const DocumentUpload = ({ formData, handleChange,agreed, setAgreed }) => {
       {/* Grama Niladhari Certificate */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <label className="form-label required w-1/2">
-          Grama Niladhari Certificate
+          A document confirming residency<br/>
+          (Grama Niladhari Certificate / Address on National Identity Card <br/>/ Address
+verification from a Water or Fixed Telephone bill)
         </label>
         <div className="w-1/2">
           <input
@@ -105,43 +109,7 @@ const DocumentUpload = ({ formData, handleChange,agreed, setAgreed }) => {
         </div>
       </div>
 
-      {/* Special Notes */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <label className="form-label w-1/2">Any Special Notes</label>
 
-        <div className="w-1/2">
-          <textarea
-            name="specialNotes"
-            rows={4}
-            maxLength={MAX_NOTES_LENGTH}
-            value={formData.specialNotes || ""}
-            onChange={handleChange}
-            placeholder="Enter any additional notes (optional)"
-            style={{
-              width: "100%",
-              padding: "8px",
-              border: "1px solid #ccc",
-              borderRadius: 4,
-              fontSize: 14,
-              resize: "vertical",
-            }}
-          />
-
-          <div
-            style={{
-              fontSize: 12,
-              textAlign: "right",
-              marginTop: 4,
-              color:
-                (formData.specialNotes?.length || 0) >= MAX_NOTES_LENGTH
-                  ? "red"
-                  : "#555",
-            }}
-          >
-            {(formData.specialNotes?.length || 0)} / {MAX_NOTES_LENGTH}
-          </div>
-        </div>
-      </div> 
       {/* ================= AGREEMENT SECTION ================= */}
       <div
         style={{

@@ -222,7 +222,7 @@ const NewCustomerStepper = () => {
   });
 
   const [documentUpload, setDocumentUpload] = useState({
-    idCopy: "",
+    idCopy: null,
     ownershipCertificate: "",
     gramaNiladhariCertificate: "",
     threephChartedEngineerCertificate: "",
