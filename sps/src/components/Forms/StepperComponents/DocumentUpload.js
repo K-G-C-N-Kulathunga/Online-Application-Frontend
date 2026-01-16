@@ -116,49 +116,87 @@ const DocumentUpload = ({ formData, handleChange }) => {
     handleChange(e);
   };
 
+  const DocLabel = ({ title, description, required }) => (
+  <div style={{ lineHeight: "1.6" }}>
+    <div
+      style={{
+        fontWeight: 600,
+        fontSize: 14,
+        color: "#111827",
+        marginBottom: 4,
+      }}
+    >
+      {title}
+      {required && (
+        <span style={{ color: "#dc2626", marginLeft: 2 }}>*</span>
+      )}
+    </div>
+
+    <div
+      style={{
+        fontSize: 12.5,
+        color: "#4b5563",
+      }}
+    >
+      {description}
+    </div>
+  </div>
+);
+
+
+
   const rows = useMemo(
-    () => [
-      {
-        name: "idCopy",
-        required: true,
-        label: (
-          <>
-            Copy of the National Identity Card / Passport / Driving License / <br />
-            Business Registration certificate of the New Tariff Customer <br />
-            or any other supporting document.
-          </>
-        ),
-      },
-      {
-        name: "ownershipCertificate",
-        required: true,
-        label: (
-          <>
-            A document proving ownership / Occupancy <br />
-            (Deed / Assessment notice / Certificate of Ownership / <br />
-            Registered Lease / Rental Agreement)
-          </>
-        ),
-      },
-      {
-        name: "gramaNiladhariCertificate",
-        required: true,
-        label: (
-          <>
-            A document confirming residency <br />
-            (Grama Niladhari Certificate / Address on National Identity Card <br />
-            / Address verification from a Water or Fixed Telephone bill)
-          </>
-        ),
-      },
-      {
-        name: "threephChartedEngineerCertificate",
-        required: false,
-        label: <>Chartered Engineer Certificate</>,
-      },
-    ],
-    []
-  );
+  () => [
+    {
+      name: "idCopy",
+      required: true,
+      label: (
+        <DocLabel
+          title="Identity Document"
+          required
+          description="Copy of the National Identity Card / Passport / Driving License / Business Registration certificate of the New Tariff
+Customer or any other supporting document."
+        />
+      ),
+    },
+    {
+      name: "ownershipCertificate",
+      required: true,
+      label: (
+        <DocLabel
+          title="Ownership / Occupancy Proof"
+          required
+          description="Deed / Assessment notice / Certificate of Ownership / Registered Lease /
+Rental Agreement"
+        />
+      ),
+    },
+    {
+      name: "gramaNiladhariCertificate",
+      required: true,
+      label: (
+        <DocLabel
+          title="Residency Confirmation"
+          required
+          description="Grama Niladhari Certificate / Address on National Identity Card / Address
+verification from a Water or Fixed Telephone bill"
+        />
+      ),
+    },
+    {
+      name: "threephChartedEngineerCertificate",
+      required: false,
+      label: (
+        <DocLabel
+          title="Chartered Engineer Certificate"
+          required
+          description="Required only for three-phase electricity connections"
+        />
+      ),
+    },
+  ],
+  []
+);
 
   return (
     <div className="form-box">
@@ -168,7 +206,7 @@ const DocumentUpload = ({ formData, handleChange }) => {
 
         return (
           <div key={r.name} className="mb-4 flex items-center justify-between gap-4">
-            <label className={`form-label ${r.required ? "required" : ""} w-1/2`}>
+            <label className="form-label w-1/2">
               {r.label}
             </label>
 

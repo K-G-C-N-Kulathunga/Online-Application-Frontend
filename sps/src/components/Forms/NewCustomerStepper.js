@@ -64,6 +64,11 @@ const NewCustomerStepper = () => {
   const [accountNumbers, setAccountNumbers] = useState([""]);
   const location = useLocation();
 
+  // ✅ OTP should be required only once per session for NEW application
+  const [otpVerified, setOtpVerified] = useState(() => {
+    return sessionStorage.getItem("otpVerified") === "true";
+  });
+
   // ✅ Agreement confirmation popup (on Submit)
   const [showAgreementModal, setShowAgreementModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -322,7 +327,7 @@ const NewCustomerStepper = () => {
         `/online-applications/generate-tempId?mobile=${customerDetails.mobileNo}`,
         { responseType: "text" }
       );
-      const tempId = res.data; // e.g. "77240628025040"
+      const tempId = res.data;
       localStorage.setItem("tempId", tempId);
 
       const legacy = buildLegacyTempId(tempId);
@@ -474,9 +479,33 @@ const NewCustomerStepper = () => {
     await api.put(`/online-applications/${tempIdToUse}`, payload);
   };
 
+  // =========================
+  // REQUIRED DOCUMENT VALIDATION (FINAL GUARD)
+  // =========================
+  const validateRequiredDocuments = () => {
+    const missing = [];
+    if (!documentUpload.idCopy) missing.push("ID Copy");
+    if (!documentUpload.ownershipCertificate) missing.push("Ownership Certificate");
+    if (!documentUpload.gramaNiladhariCertificate)
+      missing.push("Grama Niladhari Certificate");
+
+    if (missing.length > 0) {
+      alert(
+        `Please upload all required documents before submitting.\n\nMissing:\n- ${missing.join(
+          "\n- "
+        )}`
+      );
+      return false;
+    }
+    return true;
+  };
+
   // Submit: single multipart POST /application with JSON + files
   const handleSubmit = async () => {
     if (isSubmitting) return;
+
+    // 🔐 FINAL document validation (cannot bypass)
+    if (!validateRequiredDocuments()) return;
 
     try {
       setIsSubmitting(true);
@@ -578,7 +607,8 @@ const NewCustomerStepper = () => {
 
       history.push("/success", {
         applicationNo: refNo,
-        customerName: customerDetails.fullName || contactPersonDetails.contactName || "",
+        customerName:
+          customerDetails.fullName || contactPersonDetails.contactName || "",
       });
     } catch (error) {
       alert("Submission failed: " + (error?.response?.data?.error || error.message));
@@ -637,7 +667,10 @@ const NewCustomerStepper = () => {
     {
       name: "Upload Document",
       content: (
-        <DocumentUpload formData={documentUpload} handleChange={handleDocumentUploadChange} />
+        <DocumentUpload
+          formData={documentUpload}
+          handleChange={handleDocumentUploadChange}
+        />
       ),
     },
   ];
@@ -648,6 +681,10 @@ const NewCustomerStepper = () => {
     const tempId = params.get("tempId");
     if (tempId) {
       localStorage.setItem("passingTempId", tempId);
+
+      // Existing app: skip OTP for this session
+      setOtpVerified(true);
+      sessionStorage.setItem("otpVerified", "true");
 
       api
         .get(`/online-applications/${tempId}`)
@@ -767,7 +804,14 @@ const NewCustomerStepper = () => {
 
         await postCustomerDetails();
 
-        if (!tempIdFromUrl) {
+        // ✅ Existing app: no OTP
+        if (tempIdFromUrl) {
+          setActiveTab((prev) => prev + 1);
+          return;
+        }
+
+        // ✅ NEW app: OTP only ONCE per session
+        if (!otpVerified) {
           const tmp = await generateTempId();
           if (!tmp) {
             alert("Could not generate a temporary ID. Try again.");
@@ -777,11 +821,14 @@ const NewCustomerStepper = () => {
           const sent = await sendOtp(customerDetails.mobileNo);
           if (sent) return; // wait for OTP modal
         }
+
+        // If already verified, just continue
+        setActiveTab((prev) => prev + 1);
+        return;
       } else if (activeTab === 1) {
         const missing = [];
         if (!serviceLocationDetails.deptId) missing.push("Department");
-        if (!serviceLocationDetails.serviceStreetAddress)
-          missing.push("Service Street Address");
+        if (!serviceLocationDetails.serviceStreetAddress) missing.push("Service Street Address");
         if (!serviceLocationDetails.serviceSuburb) missing.push("Service Suburb");
         if (!serviceLocationDetails.serviceCity) missing.push("Service City");
         if (!serviceLocationDetails.ownership) missing.push("Ownership");
@@ -844,7 +891,11 @@ const NewCustomerStepper = () => {
     if (activeTab > 0) setActiveTab(activeTab - 1);
   };
 
-  const openAgreementModal = () => setShowAgreementModal(true);
+  const openAgreementModal = () => {
+    // ✅ do not allow opening modal unless mandatory docs exist
+    if (!validateRequiredDocuments()) return;
+    setShowAgreementModal(true);
+  };
 
   return (
     <div className="app-container">
@@ -929,6 +980,10 @@ const NewCustomerStepper = () => {
                               if (e.key === "Enter" && otp.length >= 4 && !isVerifyingOtp) {
                                 const ok = await validateOtp(customerDetails.mobileNo, otp);
                                 if (ok) {
+                                  // ✅ mark verified so it won't ask again
+                                  setOtpVerified(true);
+                                  sessionStorage.setItem("otpVerified", "true");
+
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -947,6 +1002,10 @@ const NewCustomerStepper = () => {
                               onClick={async () => {
                                 const ok = await validateOtp(customerDetails.mobileNo, otp);
                                 if (ok) {
+                                  // ✅ mark verified so it won't ask again
+                                  setOtpVerified(true);
+                                  sessionStorage.setItem("otpVerified", "true");
+
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -988,32 +1047,35 @@ const NewCustomerStepper = () => {
 
                     {/* Agreement Confirm Modal */}
                     {showAgreementModal && (
-                      <div className="otp-modal">
-                        <div className="otp-card">
-                          <h3 className="otp-title">Declaration / Agreement</h3>
+                      <div className="agreement-overlay">
+                        <div className="agreement-modal">
+                          <div className="agreement-header">
+                            <h3>Declaration / Agreement</h3>
+                          </div>
 
-                          <div style={{ fontSize: 14, lineHeight: "1.7", color: "#333" }}>
-                            <p style={{ marginTop: 0 }}>
-                              I assure that all the information given above is true and correct. If
-                              it is later proved that false information or forged documents have
-                              been submitted, I will consciously certify that the agreement signed
-                              with the Ceylon Electricity Board will be terminated and my
+                          <div className="agreement-body">
+                            <p>
+                              I assure that all the information given above is true and correct.
+                              If it is later proved that false information or forged documents
+                              have been submitted, I will consciously certify that the agreement
+                              signed with the Ceylon Electricity Board will be terminated and my
                               Electricity supply shall be disconnected and that the Ceylon
                               Electricity Board will be fully relieved of all liability in that
                               regard.
                             </p>
+
                             <p>
                               I agree to pay the full cost of change of power line route which have
                               laid across someone else&apos;s land / house / property in case of any
                               objection. I also agree to use electricity without exceeding the
-                              contract demand. I hereby request to issue an estimate for the supply
-                              of electricity to the above premises.
+                              contract demand. I hereby request to issue an estimate for the
+                              supply of electricity to the above premises.
                             </p>
                           </div>
 
-                          <div className="otp-actions" style={{ marginTop: 18 }}>
+                          <div className="agreement-actions">
                             <button
-                              className="otp-verify-btn"
+                              className="agreement-confirm"
                               disabled={isSubmitting}
                               onClick={async () => {
                                 setShowAgreementModal(false);
@@ -1024,7 +1086,7 @@ const NewCustomerStepper = () => {
                             </button>
 
                             <button
-                              className="otp-cancel-btn"
+                              className="agreement-cancel"
                               disabled={isSubmitting}
                               onClick={() => setShowAgreementModal(false)}
                             >
@@ -1034,6 +1096,7 @@ const NewCustomerStepper = () => {
                         </div>
                       </div>
                     )}
+
                   </div>
                 </div>
 
@@ -1098,10 +1161,10 @@ const NewCustomerStepper = () => {
         .otp-actions {
           margin-top: 12px; display: flex; gap: 8px; flex-wrap: nowrap; justify-content: space-between;
         }
-        .otp-verify-btn { background: #2563eb; color: #fff; padding: 8px 12px; border-radius: 8px; }
-        .otp-resend-btn { background: #f59e0b; color: #111; padding: 8px 12px; border-radius: 8px; }
-        .otp-cancel-btn { background: #e5e7eb; color: #111; padding: 8px 12px; border-radius: 8px; }
-        .otp-verify-btn:disabled, .otp-resend-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .otp-verify-btn { background: #2563eb; color: #fff; padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; }
+        .otp-resend-btn { background: #f59e0b; color: #111; padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; }
+        .otp-cancel-btn { background: #e5e7eb; color: #111; padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; }
+        .otp-verify-btn:disabled, .otp-resend-btn:disabled, .otp-cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
       `}</style>
     </div>
   );
