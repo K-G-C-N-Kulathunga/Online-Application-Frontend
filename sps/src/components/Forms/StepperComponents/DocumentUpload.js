@@ -1,17 +1,105 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 const MAX_FILE_SIZE_MB = 2;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
-const DocumentUpload = ({ formData, handleChange,agreed, setAgreed }) => {
+// PDF + JPEG only
+const ACCEPT = ".pdf,.jpg,.jpeg";
+
+const truncateFileName = (name = "", max = 28) => {
+  if (!name) return "No file chosen";
+  if (name.length <= max) return name;
+
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot) : "";
+  const base = dot > 0 ? name.slice(0, dot) : name;
+
+  const keep = Math.max(10, max - ext.length - 3);
+  return `${base.slice(0, keep)}...${ext}`;
+};
+
+const getExt = (name = "") => {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i + 1).toLowerCase() : "";
+};
+
+const isAllowedType = (file) => {
+  if (!file) return false;
+
+  const ext = getExt(file.name);
+  const okExt = ["pdf", "jpg", "jpeg"].includes(ext);
+
+  // Some browsers may give empty file.type, so ext check is main
+  const okMime =
+    file.type === "application/pdf" ||
+    file.type === "image/jpeg" ||
+    file.type === "image/jpg" ||
+    file.type === "";
+
+  return okExt && okMime;
+};
+
+const DocumentUpload = ({ formData, handleChange }) => {
   const [errors, setErrors] = useState({});
-  const [showAgreement, setShowAgreement] = useState(false);
+  const [fileUrls, setFileUrls] = useState({
+    idCopy: null,
+    ownershipCertificate: null,
+    gramaNiladhariCertificate: null,
+    threephChartedEngineerCertificate: null,
+  });
+
+  const inputRefs = useRef({
+    idCopy: null,
+    ownershipCertificate: null,
+    gramaNiladhariCertificate: null,
+    threephChartedEngineerCertificate: null,
+  });
+
+  // cleanup object urls
+  useEffect(() => {
+    return () => {
+      Object.values(fileUrls).forEach((u) => {
+        if (u) URL.revokeObjectURL(u);
+      });
+    };
+  }, [fileUrls]);
+
+  const setFileUrlForField = (field, file) => {
+    setFileUrls((prev) => {
+      if (prev[field]) URL.revokeObjectURL(prev[field]);
+      return { ...prev, [field]: file ? URL.createObjectURL(file) : null };
+    });
+  };
+
+  const onPick = (field) => {
+    const el = inputRefs.current[field];
+    if (el) el.click();
+  };
+
+  const downloadSelected = (field) => {
+    const file = formData?.[field];
+    const url = fileUrls?.[field];
+    if (!file || !url) return;
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = file.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
 
   const handleFileChange = (e) => {
     const { name, files } = e.target;
     const file = files?.[0];
-
     if (!file) return;
+
+    if (!isAllowedType(file)) {
+      setErrors((prev) => ({ ...prev, [name]: "Only PDF or JPEG files are allowed." }));
+      e.target.value = "";
+      setFileUrlForField(name, null);
+      return;
+    }
 
     if (file.size > MAX_FILE_SIZE_BYTES) {
       setErrors((prev) => ({
@@ -19,163 +107,160 @@ const DocumentUpload = ({ formData, handleChange,agreed, setAgreed }) => {
         [name]: `File size must not exceed ${MAX_FILE_SIZE_MB} MB`,
       }));
       e.target.value = "";
+      setFileUrlForField(name, null);
       return;
     }
 
     setErrors((prev) => ({ ...prev, [name]: "" }));
+    setFileUrlForField(name, file);
     handleChange(e);
   };
 
+  const rows = useMemo(
+    () => [
+      {
+        name: "idCopy",
+        required: true,
+        label: (
+          <>
+            Copy of the National Identity Card / Passport / Driving License / <br />
+            Business Registration certificate of the New Tariff Customer <br />
+            or any other supporting document.
+          </>
+        ),
+      },
+      {
+        name: "ownershipCertificate",
+        required: true,
+        label: (
+          <>
+            A document proving ownership / Occupancy <br />
+            (Deed / Assessment notice / Certificate of Ownership / <br />
+            Registered Lease / Rental Agreement)
+          </>
+        ),
+      },
+      {
+        name: "gramaNiladhariCertificate",
+        required: true,
+        label: (
+          <>
+            A document confirming residency <br />
+            (Grama Niladhari Certificate / Address on National Identity Card <br />
+            / Address verification from a Water or Fixed Telephone bill)
+          </>
+        ),
+      },
+      {
+        name: "threephChartedEngineerCertificate",
+        required: false,
+        label: <>Chartered Engineer Certificate</>,
+      },
+    ],
+    []
+  );
+
   return (
     <div className="form-box">
-      {/* ID Copy */}
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <label className="form-label required w-1/2">Copy of the National Identity Card / Passport / Driving License / <br/>Business Registration certificate of the New Tariff
-Customer <br/>or any other supporting document.</label>
-        <div className="w-1/2">
-          <input
-            type="file"
-            name="idCopy"
-            accept=".pdf,.jpg,.jpeg"
-            onChange={handleFileChange}
-          />
-          {errors.idCopy && (
-            <div style={{ color: "red", fontSize: 12 }}>{errors.idCopy}</div>
-          )}
-        </div>
-      </div>
+      {rows.map((r) => {
+        const file = formData?.[r.name];
+        const shownName = truncateFileName(file?.name || "", 30);
 
-      {/* Ownership Certificate */}
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <label className="form-label required w-1/2">
-          A document proving ownership / Occupancy <br/>
-          (Deed / Assessment notice / Certificate of Ownership / <br/>Registered Lease /
-Rental Agreement)
-        </label>
-        <div className="w-1/2">
-          <input
-            type="file"
-            name="ownershipCertificate"
-            accept=".pdf,.jpg,.jpeg"
-            onChange={handleFileChange}
-          />
-          {errors.ownershipCertificate && (
-            <div style={{ color: "red", fontSize: 12 }}>
-              {errors.ownershipCertificate}
-            </div>
-          )}
-        </div>
-      </div>
+        return (
+          <div key={r.name} className="mb-4 flex items-center justify-between gap-4">
+            <label className={`form-label ${r.required ? "required" : ""} w-1/2`}>
+              {r.label}
+            </label>
 
-      {/* Grama Niladhari Certificate */}
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <label className="form-label required w-1/2">
-          A document confirming residency<br/>
-          (Grama Niladhari Certificate / Address on National Identity Card <br/>/ Address
-verification from a Water or Fixed Telephone bill)
-        </label>
-        <div className="w-1/2">
-          <input
-            type="file"
-            name="gramaNiladhariCertificate"
-            accept=".pdf,.jpg,.jpeg"
-            onChange={handleFileChange}
-          />
-          {errors.gramaNiladhariCertificate && (
-            <div style={{ color: "red", fontSize: 12 }}>
-              {errors.gramaNiladhariCertificate}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Chartered Engineer Certificate */}
-      <div className="mb-6 flex items-center justify-between gap-4">
-        <label className="form-label w-1/2">
-          Chartered Engineer Certificate
-        </label>
-        <div className="w-1/2">
-          <input
-            type="file"
-            name="threephChartedEngineerCertificate"
-            accept=".pdf,.jpg,.jpeg"
-            onChange={handleFileChange}
-          />
-          {errors.threephChartedEngineerCertificate && (
-            <div style={{ color: "red", fontSize: 12 }}>
-              {errors.threephChartedEngineerCertificate}
-            </div>
-          )}
-        </div>
-      </div>
-
-
-      {/* ================= AGREEMENT SECTION ================= */}
-      <div
-        style={{
-          borderTop: "1px solid #ddd",
-          paddingTop: 16,
-          marginTop: 20,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-          <input
-            type="checkbox"
-            checked={agreed}
-            onChange={(e) => setAgreed(e.target.checked)}
-            id="agreement"
-            style={{ marginTop: 4 }}
-          />
-
-          <label htmlFor="agreement" style={{ fontSize: 14 }}>
-            I confirm that the information provided is accurate to the best of my
-            knowledge.
-            <button
-              type="button"
-              onClick={() => setShowAgreement(!showAgreement)}
+            {/* Right side controls (fixed width so it never moves) */}
+            <div
+              className="w-1/2"
               style={{
-                marginLeft: 6,
-                color: "#2563eb",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-                fontSize: 14,
+                display: "flex",
+                justifyContent: "flex-end",
               }}
             >
-              {showAgreement ? "Show less" : "Read more"}
-            </button>
-          </label>
-        </div>
+              {/* Hidden native input */}
+              <input
+                ref={(el) => (inputRefs.current[r.name] = el)}
+                type="file"
+                name={r.name}
+                accept={ACCEPT}
+                onChange={handleFileChange}
+                style={{ display: "none" }}
+              />
 
-        {showAgreement && (
-          <div
-            style={{
-              marginTop: 8,
-              fontSize: 13,
-              lineHeight: "1.6",
-              color: "#333",
-              paddingLeft: 26,
-            }}
-          >
-            I understand that if any inaccurate or incomplete information is
-            submitted, this application may be rejected, resulting in delays to
-            processing. I am aware that upon discovery of any forged
-            documentation (or any copies of them) presented by me to the Lanka
-            Electricity Company (Private) Limited with respect to this
-            application, relating to ownership or occupancy of the premises or
-            identity of the applicant, this application will be rejected or, if
-            discovered after obtaining the electricity connection, the
-            connection is liable to be disconnected.
-          </div>
-        )}
+              {/* Fixed-size container to prevent shifting */}
+              <div
+                style={{
+                  width: 420, // ✅ FIXED WIDTH (change if you want)
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => onPick(r.name)}
+                  style={{
+                    width: 110, // ✅ fixed button width
+                    border: "1px solid #aaa",
+                    background: "#f3f4f6",
+                    padding: "6px 10px",
+                    borderRadius: 4,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    textAlign: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  Choose File
+                </button>
 
-        {!agreed && (
-          <div style={{ color: "red", fontSize: 12, marginTop: 6 }}>
-            You must agree before submitting the application.
+                {/* filename area fixed width */}
+                <button
+                  type="button"
+                  onClick={() => downloadSelected(r.name)}
+                  disabled={!file}
+                  title={file ? file.name : "No file chosen"}
+                  style={{
+                    width: 290, // ✅ fixed filename width
+                    border: "none",
+                    background: "transparent",
+                    padding: 0,
+                    cursor: file ? "pointer" : "default",
+                    color: file ? "#2563eb" : "#6b7280",
+                    textDecoration: file ? "underline" : "none",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    textAlign: "left",
+                    flexShrink: 0,
+                  }}
+                >
+                  {shownName}
+                </button>
+              </div>
+            </div>
+
+            {/* Error under row */}
+            {errors[r.name] ? (
+              <div
+                style={{
+                  width: "100%",
+                  marginLeft: "50%",
+                  marginTop: 6,
+                  color: "red",
+                  fontSize: 12,
+                }}
+              >
+                {errors[r.name]}
+              </div>
+            ) : null}
           </div>
-        )}
-      </div>
+        );
+      })}
     </div>
   );
 };

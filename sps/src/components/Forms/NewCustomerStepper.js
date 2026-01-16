@@ -24,9 +24,10 @@ const safeGet = (key) => {
 };
 
 // Recreate legacy id: "0" + (Number(tempId) - 1)
+// Handles strings with/without leading zeros.
 const buildLegacyTempId = (raw) => {
   if (!raw) return null;
-  const num = Number(String(raw).replace(/^0+/, "")); // strip leading zeros
+  const num = Number(String(raw).replace(/^0+/, "")); // strip leading zeros for parse
   if (Number.isNaN(num)) return null;
   return "0" + (num - 1);
 };
@@ -63,13 +64,9 @@ const NewCustomerStepper = () => {
   const [accountNumbers, setAccountNumbers] = useState([""]);
   const location = useLocation();
 
-  // ✅ NEW: keep tempId in state until OTP verified
-  const [draftTempId, setDraftTempId] = useState(null);
-
-  // ✅ NEW: OTP should be required only once (for NEW application)
-  const [otpVerified, setOtpVerified] = useState(() => {
-    return sessionStorage.getItem("otpVerified") === "true";
-  });
+  // ✅ Agreement confirmation popup (on Submit)
+  const [showAgreementModal, setShowAgreementModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // =========================
   // OTP state (modal overlay)
@@ -155,19 +152,6 @@ const NewCustomerStepper = () => {
     } finally {
       setIsVerifyingOtp(false);
     }
-  };
-
-  // ✅ Persist tempId ONLY AFTER OTP verification
-  const persistTempIdAfterOtp = () => {
-    if (!draftTempId) return;
-
-    localStorage.setItem("tempId", draftTempId);
-    const legacy = buildLegacyTempId(draftTempId);
-    if (legacy) localStorage.setItem("passingTempId", legacy);
-
-    // ✅ mark OTP as verified (so it will NOT be asked again)
-    setOtpVerified(true);
-    sessionStorage.setItem("otpVerified", "true");
   };
 
   // =========================
@@ -270,7 +254,7 @@ const NewCustomerStepper = () => {
     );
   };
 
-  // Fetch existing customer by ID
+  // Fetch existing customer by ID (auto-search)
   const fetchCustomerById = async (idNo) => {
     try {
       const response = await api.get(`/applicants/findById/${idNo}`);
@@ -329,19 +313,21 @@ const NewCustomerStepper = () => {
     documentUpload,
   ]);
 
-  // =========================
-  // TEMP ID generation
-  // =========================
-  // ✅ IMPORTANT: Do NOT store tempId to localStorage here anymore.
-  // Only keep it in draftTempId state. Persist after OTP verified.
+  // ======== API helpers for step saves ========
+
+  // Generate server tempId and also compute/store the legacy id
   const generateTempId = async () => {
     try {
       const res = await api.get(
         `/online-applications/generate-tempId?mobile=${customerDetails.mobileNo}`,
         { responseType: "text" }
       );
-      const tempId = res.data;
-      setDraftTempId(tempId);
+      const tempId = res.data; // e.g. "77240628025040"
+      localStorage.setItem("tempId", tempId);
+
+      const legacy = buildLegacyTempId(tempId);
+      if (legacy) localStorage.setItem("passingTempId", legacy);
+
       return tempId;
     } catch (e) {
       console.error("Error generating tempId:", e);
@@ -349,23 +335,20 @@ const NewCustomerStepper = () => {
     }
   };
 
-  // =========================
-  // API calls for step saves
-  // =========================
-
   // Customer Details (POST for new draft, PUT for existing draft)
   const postCustomerDetails = async () => {
     try {
       const params = new URLSearchParams(location.search);
       const tempIdFromUrl = params.get("tempId");
-
       const existingPassing = safeGet("passingTempId");
       const storedTempId = safeGet("tempId");
+
       const legacyId = buildLegacyTempId(storedTempId);
+      if (legacyId) localStorage.setItem("passingTempId", legacyId);
 
       let response;
 
-      // NEW draft -> POST only (NO tempId generate here)
+      // NEW draft -> POST first
       if ((!existingPassing || existingPassing === "null") && !tempIdFromUrl) {
         const payload = {
           idNo: customerDetails.idNo,
@@ -385,6 +368,10 @@ const NewCustomerStepper = () => {
         };
 
         response = await api.post(`/online-applications`, payload);
+
+        // Ensure tempId is available for later steps
+        const tmp = await generateTempId();
+        if (!tmp) console.warn("tempId not generated; PUTs may fail until it is.");
       } else {
         // UPDATE existing draft -> PUT
         const tempIdToUse =
@@ -428,31 +415,20 @@ const NewCustomerStepper = () => {
       return;
     }
 
-    try {
-      const payload = {
-        neighboursAccNo: serviceLocationDetails.neighboursAccNo,
-        serviceStreetAddress: serviceLocationDetails.serviceStreetAddress,
-        serviceSuburb: serviceLocationDetails.serviceSuburb,
-        serviceCity: serviceLocationDetails.serviceCity,
-        servicePostalCode: serviceLocationDetails.servicePostalCode,
-        assessmentNo: serviceLocationDetails.assessmentNo,
-        ownership: serviceLocationDetails.ownership,
-        latitude: serviceLocationDetails.latitude,
-        longitude: serviceLocationDetails.longitude,
-        deptId: serviceLocationDetails.deptId,
-      };
+    const payload = {
+      neighboursAccNo: serviceLocationDetails.neighboursAccNo,
+      serviceStreetAddress: serviceLocationDetails.serviceStreetAddress,
+      serviceSuburb: serviceLocationDetails.serviceSuburb,
+      serviceCity: serviceLocationDetails.serviceCity,
+      servicePostalCode: serviceLocationDetails.servicePostalCode,
+      assessmentNo: serviceLocationDetails.assessmentNo,
+      ownership: serviceLocationDetails.ownership,
+      latitude: serviceLocationDetails.latitude,
+      longitude: serviceLocationDetails.longitude,
+      deptId: serviceLocationDetails.deptId,
+    };
 
-      const response = await api.put(`/online-applications/${tempIdToUse}`, payload);
-      console.log("Updated data:", serviceLocationDetails);
-      console.log("Backend response:", response?.data);
-    } catch (error) {
-      console.error("Error updating details:", error);
-      alert(
-        "Failed to update service location details. Error: " +
-          (error?.message || JSON.stringify(error))
-      );
-      throw error;
-    }
+    await api.put(`/online-applications/${tempIdToUse}`, payload);
   };
 
   const postContactPersonDetails = async () => {
@@ -462,27 +438,16 @@ const NewCustomerStepper = () => {
       return;
     }
 
-    try {
-      const payload = {
-        contactIdNo: contactPersonDetails.contactIdNo,
-        contactName: contactPersonDetails.contactName,
-        contactAddress: contactPersonDetails.contactAddress,
-        contactTelephone: contactPersonDetails.contactTelephone,
-        contactMobile: contactPersonDetails.contactMobile,
-        contactEmail: contactPersonDetails.contactEmail,
-      };
+    const payload = {
+      contactIdNo: contactPersonDetails.contactIdNo,
+      contactName: contactPersonDetails.contactName,
+      contactAddress: contactPersonDetails.contactAddress,
+      contactTelephone: contactPersonDetails.contactTelephone,
+      contactMobile: contactPersonDetails.contactMobile,
+      contactEmail: contactPersonDetails.contactEmail,
+    };
 
-      const response = await api.put(`/online-applications/${tempIdToUse}`, payload);
-      console.log("Updated data:", payload);
-      console.log("Backend response:", response?.data);
-    } catch (error) {
-      console.error("Error updating details:", error);
-      alert(
-        "Failed to update contact person details. Error: " +
-          (error?.message || JSON.stringify(error))
-      );
-      throw error;
-    }
+    await api.put(`/online-applications/${tempIdToUse}`, payload);
   };
 
   const postConnectionDetails = async () => {
@@ -492,59 +457,30 @@ const NewCustomerStepper = () => {
       return;
     }
 
-    try {
-      const payload = {
-        phase:
-          connectionDetails.phase === 3
-            ? true
-            : connectionDetails.phase === 1
-            ? false
-            : undefined,
-        connectionType: connectionDetails.connectionType,
-        usageElectricity: connectionDetails.usageElectricity,
-        requestingTime: connectionDetails.requestingTime,
-        boundaryWall: connectionDetails.boundaryWall,
-        preAccountNo: connectionDetails.preAccountNo,
-      };
+    const payload = {
+      phase:
+        connectionDetails.phase === 3
+          ? true
+          : connectionDetails.phase === 1
+          ? false
+          : undefined,
+      connectionType: connectionDetails.connectionType,
+      usageElectricity: connectionDetails.usageElectricity,
+      requestingTime: connectionDetails.requestingTime,
+      boundaryWall: connectionDetails.boundaryWall,
+      preAccountNo: connectionDetails.preAccountNo,
+    };
 
-      await api.put(`/online-applications/${tempIdToUse}`, payload);
-      console.log("✔ Connection details updated:", payload);
-
-      if (customerDetails?.idNo) {
-        const cleanAccounts = accountNumbers
-          .map((acc) => acc.trim())
-          .filter((acc) => acc !== "");
-        if (cleanAccounts.length > 0) {
-          try {
-            const getResponse = await api.get(`/accounts/${customerDetails.idNo}`);
-            const existingAccounts = getResponse.data || [];
-            if (existingAccounts.length > 0) {
-              await api.put(`/accounts/${customerDetails.idNo}`, cleanAccounts);
-            } else {
-              await api.post(`/accounts/${customerDetails.idNo}`, cleanAccounts);
-            }
-          } catch (err) {
-            console.error("❌ Error saving account numbers:", err);
-            alert(
-              "Failed to save account numbers. Error: " +
-                (err?.message || JSON.stringify(err))
-            );
-            throw err;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("❌ Error updating details:", error);
-      alert(
-        "Failed to update connection details. Error: " +
-          (error?.message || JSON.stringify(error))
-      );
-    }
+    await api.put(`/online-applications/${tempIdToUse}`, payload);
   };
 
   // Submit: single multipart POST /application with JSON + files
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
     try {
+      setIsSubmitting(true);
+
       const formDataDto = {
         applicantDto: {
           idNo: customerDetails.idNo,
@@ -637,7 +573,9 @@ const NewCustomerStepper = () => {
         "lastCustomerName",
         customerDetails.fullName || contactPersonDetails.contactName || ""
       );
+
       alert(`Application submitted successfully! Ref: ${refNo}`);
+
       history.push("/success", {
         applicationNo: refNo,
         customerName: customerDetails.fullName || contactPersonDetails.contactName || "",
@@ -645,6 +583,8 @@ const NewCustomerStepper = () => {
     } catch (error) {
       alert("Submission failed: " + (error?.response?.data?.error || error.message));
       console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -657,6 +597,7 @@ const NewCustomerStepper = () => {
           handleChange={handleCustomerDetailsChange}
           setFormData={setCustomerDetails}
           customerExists={customerExists}
+          fetchCustomerById={fetchCustomerById}
         />
       ),
     },
@@ -696,10 +637,7 @@ const NewCustomerStepper = () => {
     {
       name: "Upload Document",
       content: (
-        <DocumentUpload
-          formData={documentUpload}
-          handleChange={handleDocumentUploadChange}
-        />
+        <DocumentUpload formData={documentUpload} handleChange={handleDocumentUploadChange} />
       ),
     },
   ];
@@ -710,10 +648,6 @@ const NewCustomerStepper = () => {
     const tempId = params.get("tempId");
     if (tempId) {
       localStorage.setItem("passingTempId", tempId);
-
-      // ✅ Existing application should NOT require OTP
-      setOtpVerified(true);
-      sessionStorage.setItem("otpVerified", "true");
 
       api
         .get(`/online-applications/${tempId}`)
@@ -811,7 +745,7 @@ const NewCustomerStepper = () => {
   const handleNext = async () => {
     try {
       const params = new URLSearchParams(location.search);
-      const tempIdFromUrl = params.get("tempId"); // Existing Application
+      const tempIdFromUrl = params.get("tempId"); // presence => Existing Application
 
       if (activeTab === 0) {
         const missing = [];
@@ -827,31 +761,22 @@ const NewCustomerStepper = () => {
         if (!customerDetails.preferredLanguage) missing.push("Preferred Language");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required customer details.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required customer details.\nMissing: ${missing.join(", ")}`);
           return;
         }
 
         await postCustomerDetails();
 
-        // ✅ If existing app OR OTP already verified, move to next without OTP
-        if (tempIdFromUrl || otpVerified) {
-          setActiveTab((prev) => prev + 1);
-          return;
+        if (!tempIdFromUrl) {
+          const tmp = await generateTempId();
+          if (!tmp) {
+            alert("Could not generate a temporary ID. Try again.");
+            return;
+          }
+
+          const sent = await sendOtp(customerDetails.mobileNo);
+          if (sent) return; // wait for OTP modal
         }
-
-        // 🔐 OTP only once for NEW application
-        const tmp = await generateTempId();
-        if (!tmp) {
-          alert("Could not generate a temporary ID. Try again.");
-          return;
-        }
-
-        const sent = await sendOtp(customerDetails.mobileNo);
-        if (!sent) return;
-
-        return; // wait for OTP verification (modal)
       } else if (activeTab === 1) {
         const missing = [];
         if (!serviceLocationDetails.deptId) missing.push("Department");
@@ -864,9 +789,7 @@ const NewCustomerStepper = () => {
         if (!serviceLocationDetails.longitude) missing.push("Longitude");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required service location details.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required service location details.\nMissing: ${missing.join(", ")}`);
           return;
         }
 
@@ -875,15 +798,12 @@ const NewCustomerStepper = () => {
         const missing = [];
         if (!connectionDetails.phase) missing.push("Phase");
         if (!connectionDetails.connectionType) missing.push("Connection Type");
-        if (!connectionDetails.usageElectricity)
-          missing.push("Usage of Electricity");
+        if (!connectionDetails.usageElectricity) missing.push("Usage of Electricity");
         if (!connectionDetails.requestingTime) missing.push("Requesting Time");
         if (!connectionDetails.boundaryWall) missing.push("Boundary Wall");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required connection details.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required connection details.\nMissing: ${missing.join(", ")}`);
           return;
         }
 
@@ -896,9 +816,7 @@ const NewCustomerStepper = () => {
         if (!contactPersonDetails.contactMobile) missing.push("Contact Mobile");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required contact person details.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required contact person details.\nMissing: ${missing.join(", ")}`);
           return;
         }
 
@@ -906,15 +824,11 @@ const NewCustomerStepper = () => {
       } else if (activeTab === 4) {
         const missing = [];
         if (!documentUpload.idCopy) missing.push("ID Copy");
-        if (!documentUpload.ownershipCertificate)
-          missing.push("Ownership Certificate");
-        if (!documentUpload.gramaNiladhariCertificate)
-          missing.push("Grama Niladhari Certificate");
+        if (!documentUpload.ownershipCertificate) missing.push("Ownership Certificate");
+        if (!documentUpload.gramaNiladhariCertificate) missing.push("Grama Niladhari Certificate");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required document upload fields.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required document upload fields.\nMissing: ${missing.join(", ")}`);
           return;
         }
       }
@@ -930,6 +844,8 @@ const NewCustomerStepper = () => {
     if (activeTab > 0) setActiveTab(activeTab - 1);
   };
 
+  const openAgreementModal = () => setShowAgreementModal(true);
+
   return (
     <div className="app-container">
       <div className="main-content">
@@ -944,10 +860,7 @@ const NewCustomerStepper = () => {
                 {/* Stepper */}
                 <div className="flex justify-between items-center mb-4 mt-4 relative w-full">
                   {tabs.map((tab, index) => (
-                    <div
-                      key={index}
-                      className="relative flex-1 flex flex-col items-center"
-                    >
+                    <div key={index} className="relative flex-1 flex flex-col items-center">
                       <div
                         className={`relative z-10 w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all ${
                           index === activeTab
@@ -1013,17 +926,9 @@ const NewCustomerStepper = () => {
                               setOtpError("");
                             }}
                             onKeyDown={async (e) => {
-                              if (
-                                e.key === "Enter" &&
-                                otp.length >= 4 &&
-                                !isVerifyingOtp
-                              ) {
-                                const ok = await validateOtp(
-                                  customerDetails.mobileNo,
-                                  otp
-                                );
+                              if (e.key === "Enter" && otp.length >= 4 && !isVerifyingOtp) {
+                                const ok = await validateOtp(customerDetails.mobileNo, otp);
                                 if (ok) {
-                                  persistTempIdAfterOtp();
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -1033,23 +938,15 @@ const NewCustomerStepper = () => {
                             className="otp-input"
                           />
 
-                          {otpError && (
-                            <div style={{ color: "red", marginTop: 6 }}>
-                              {otpError}
-                            </div>
-                          )}
+                          {otpError && <div style={{ color: "red", marginTop: 6 }}>{otpError}</div>}
 
                           <div className="otp-actions">
                             <button
                               className="otp-verify-btn"
                               disabled={otp.length < 4 || isVerifyingOtp}
                               onClick={async () => {
-                                const ok = await validateOtp(
-                                  customerDetails.mobileNo,
-                                  otp
-                                );
+                                const ok = await validateOtp(customerDetails.mobileNo, otp);
                                 if (ok) {
-                                  persistTempIdAfterOtp();
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -1064,11 +961,7 @@ const NewCustomerStepper = () => {
                               onClick={async () => {
                                 await sendOtp(customerDetails.mobileNo);
                               }}
-                              title={
-                                otpTimer > 0
-                                  ? `You can resend in ${otpTimer}s`
-                                  : "Resend OTP"
-                              }
+                              title={otpTimer > 0 ? `You can resend in ${otpTimer}s` : "Resend OTP"}
                             >
                               {isSendingOtp
                                 ? "Sending..."
@@ -1084,8 +977,56 @@ const NewCustomerStepper = () => {
                                 setOtp("");
                                 setOtpError("");
                                 setOtpTimer(0);
-                                setDraftTempId(null);
                               }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Agreement Confirm Modal */}
+                    {showAgreementModal && (
+                      <div className="otp-modal">
+                        <div className="otp-card">
+                          <h3 className="otp-title">Declaration / Agreement</h3>
+
+                          <div style={{ fontSize: 14, lineHeight: "1.7", color: "#333" }}>
+                            <p style={{ marginTop: 0 }}>
+                              I assure that all the information given above is true and correct. If
+                              it is later proved that false information or forged documents have
+                              been submitted, I will consciously certify that the agreement signed
+                              with the Ceylon Electricity Board will be terminated and my
+                              Electricity supply shall be disconnected and that the Ceylon
+                              Electricity Board will be fully relieved of all liability in that
+                              regard.
+                            </p>
+                            <p>
+                              I agree to pay the full cost of change of power line route which have
+                              laid across someone else&apos;s land / house / property in case of any
+                              objection. I also agree to use electricity without exceeding the
+                              contract demand. I hereby request to issue an estimate for the supply
+                              of electricity to the above premises.
+                            </p>
+                          </div>
+
+                          <div className="otp-actions" style={{ marginTop: 18 }}>
+                            <button
+                              className="otp-verify-btn"
+                              disabled={isSubmitting}
+                              onClick={async () => {
+                                setShowAgreementModal(false);
+                                await handleSubmit();
+                              }}
+                            >
+                              {isSubmitting ? "Submitting..." : "Confirm & Submit"}
+                            </button>
+
+                            <button
+                              className="otp-cancel-btn"
+                              disabled={isSubmitting}
+                              onClick={() => setShowAgreementModal(false)}
                             >
                               Cancel
                             </button>
@@ -1123,10 +1064,12 @@ const NewCustomerStepper = () => {
                       </button>
                     ) : (
                       <button
-                        onClick={handleSubmit}
+                        onClick={openAgreementModal}
+                        disabled={isSubmitting}
                         className="bg-green-500 text-white font-bold text-xs px-6 py-3 rounded shadow hover:shadow-md transition duration-150"
+                        style={{ opacity: isSubmitting ? 0.7 : 1 }}
                       >
-                        Submit
+                        {isSubmitting ? "Submitting..." : "Submit"}
                       </button>
                     )}
                   </div>
@@ -1137,14 +1080,14 @@ const NewCustomerStepper = () => {
         </div>
       </div>
 
-      {/* Minimal inline styles for OTP modal */}
+      {/* Minimal inline styles for OTP modal (reused for agreement modal too) */}
       <style>{`
         .otp-modal {
           position: fixed; inset: 0; background: rgba(0,0,0,0.5);
           display: flex; align-items: center; justify-content: center; z-index: 9999;
         }
         .otp-card {
-          background: #fff; padding: 20px; border-radius: 12px; width: 400px;
+          background: #fff; padding: 20px; border-radius: 12px; width: 440px;
           box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         .otp-title { margin: 0 0 10px 0; font-weight: 600; }
@@ -1155,9 +1098,9 @@ const NewCustomerStepper = () => {
         .otp-actions {
           margin-top: 12px; display: flex; gap: 8px; flex-wrap: nowrap; justify-content: space-between;
         }
-        .otp-verify-btn { background: #2563eb; color: #fff; }
-        .otp-resend-btn { background: #f59e0b; color: #111; }
-        .otp-cancel-btn { background: #e5e7eb; color: #111;  }
+        .otp-verify-btn { background: #2563eb; color: #fff; padding: 8px 12px; border-radius: 8px; }
+        .otp-resend-btn { background: #f59e0b; color: #111; padding: 8px 12px; border-radius: 8px; }
+        .otp-cancel-btn { background: #e5e7eb; color: #111; padding: 8px 12px; border-radius: 8px; }
         .otp-verify-btn:disabled, .otp-resend-btn:disabled { opacity: 0.6; cursor: not-allowed; }
       `}</style>
     </div>
