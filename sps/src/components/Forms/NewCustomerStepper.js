@@ -680,6 +680,7 @@ const NewCustomerStepper = () => {
           customerData={customerDetails}
           accountNumbers={accountNumbers}
           setAccountNumbers={setAccountNumbers}
+          serviceArea={serviceLocationDetails.area}
         />
       ),
     },
@@ -982,6 +983,7 @@ const NewCustomerStepper = () => {
                         setFormData={setConnectionDetails}
                         accountNumbers={accountNumbers}
                         setAccountNumbers={setAccountNumbers}
+                        serviceArea={serviceLocationDetails.area}
                       />
                     ) : activeTab === 1 ? (
                       <ServiceLocationDetails
