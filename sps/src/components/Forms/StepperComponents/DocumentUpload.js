@@ -154,8 +154,7 @@ const DocumentUpload = ({ formData, handleChange }) => {
         <DocLabel
           title="Identity Document"
           required
-          description="Copy of the National Identity Card / Passport / Driving License / Business Registration certificate of the New Tariff
-Customer or any other supporting document."
+          description="Copy of the National Identity Card / Passport / Driving License / Business Registration certificate of the New Tariff Customer or any other supporting document."
         />
       ),
     },
@@ -166,8 +165,7 @@ Customer or any other supporting document."
         <DocLabel
           title="Ownership / Occupancy Proof"
           required
-          description="Deed / Assessment notice / Certificate of Ownership / Registered Lease /
-Rental Agreement"
+          description="Deed / Assessment notice / Certificate of Ownership / Registered Lease / Rental Agreement"
         />
       ),
     },
@@ -178,8 +176,7 @@ Rental Agreement"
         <DocLabel
           title="Residency Confirmation"
           required
-          description="Grama Niladhari Certificate / Address on National Identity Card / Address
-verification from a Water or Fixed Telephone bill"
+          description="Grama Niladhari Certificate / Address on National Identity Card / Addressverification from a Water or Fixed Telephone bill"
         />
       ),
     },
