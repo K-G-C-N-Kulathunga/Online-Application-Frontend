@@ -11,10 +11,10 @@ import { ConnectionDetails } from "../Forms/StepperComponents/ConnectionDetails"
 import DocumentUpload from "./StepperComponents/DocumentUpload";
 import { api } from "../../apiService";
 
-// Optional: centralize SharedService base (or keep your fixed IP if required)
+// Optional: centralize SharedService base
 const BASE_URL = process.env.REACT_APP_SHARED_SERVICE_BASE;
-
 const OTP_BASE = `${BASE_URL}/SharedService`;
+
 // ========= Helpers for tempId handling =========
 
 // Safely read from localStorage ("null" -> null)
@@ -49,8 +49,6 @@ const resolveTempIdForPut = (location) => {
   return null;
 };
 
-// ==============================================
-
 const maskPhone = (phone) => {
   const digits = (phone || "").toString().replace(/\D/g, "");
   if (!digits) return "";
@@ -65,6 +63,15 @@ const NewCustomerStepper = () => {
   const history = useHistory();
   const [accountNumbers, setAccountNumbers] = useState([""]);
   const location = useLocation();
+
+  // ✅ OTP should be required only once per session for NEW application
+  const [otpVerified, setOtpVerified] = useState(() => {
+    return sessionStorage.getItem("otpVerified") === "true";
+  });
+
+  // ✅ Agreement confirmation popup (on Submit)
+  const [showAgreementModal, setShowAgreementModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // =========================
   // OTP state (modal overlay)
@@ -89,29 +96,7 @@ const NewCustomerStepper = () => {
     return () => clearInterval(id);
   }, [showOtpModal, otpTimer]);
 
-  // const sendOtp = async (mobileNo) => {
-  //   if (!mobileNo || String(mobileNo).trim().length < 9) {
-  //     alert("Please enter a valid mobile number before sending OTP.");
-  //     return false;
-  //   }
-  //   try {
-  //     setIsSendingOtp(true);
-  //     setOtp("");
-  //     setOtpError("");
-  //     await axios.post(`${OTP_BASE}/api/otp/sendOtp`, { mobileNo });
-  //     setShowOtpModal(true);
-  //     setOtpTimer(60);
-  //     return true;
-  //   } catch (error) {
-  //     console.error("sendOtp failed:", error);
-  //     alert("Failed to send OTP. Please try again.");
-  //     return false;
-  //   } finally {
-  //     setIsSendingOtp(false);
-  //   }
-  // };
-
-    const sendOtp = async (mobileNo) => {
+  const sendOtp = async (mobileNo) => {
     if (!mobileNo || String(mobileNo).trim().length < 9) {
       alert("Please enter a valid mobile number before sending OTP.");
       return false;
@@ -123,7 +108,7 @@ const NewCustomerStepper = () => {
 
       await axios.post(`${OTP_BASE}/api/otp/sendOtp`, {
         mobileNo,
-        systemName: "New Service Connection",   // <- controls the text in the SMS
+        systemName: "New Service Connection",
         systemCode: "CEB Info",
       });
 
@@ -139,7 +124,6 @@ const NewCustomerStepper = () => {
     }
   };
 
-
   const validateOtp = async (mobileNo, code) => {
     if (!code || code.length < 4) {
       setOtpError("Please enter the OTP.");
@@ -152,6 +136,7 @@ const NewCustomerStepper = () => {
         mobileNo,
         otp: code,
       });
+
       const data = res?.data;
       const ok =
         data === true ||
@@ -159,6 +144,7 @@ const NewCustomerStepper = () => {
         data?.valid === "Y" ||
         String(data?.status || "").toUpperCase() === "VERIFIED" ||
         String(data?.message || "").toLowerCase().includes("valid");
+
       if (!ok) {
         setOtpError("Invalid OTP. Please try again.");
         return false;
@@ -276,7 +262,7 @@ const NewCustomerStepper = () => {
   // Fetch existing customer by ID (auto-search)
   const fetchCustomerById = async (idNo) => {
     try {
-      const response = await api.get(`/applicants/findById/${idNo}`);//applicants/findById/${idNo}
+      const response = await api.get(`/applicants/findById/${idNo}`);
       if (response.data) {
         setCustomerExists(true);
         setCustomerDetails((prev) => ({
@@ -294,15 +280,6 @@ const NewCustomerStepper = () => {
     }
   };
 
-  // useEffect(() => {
-  //   const timer = setTimeout(() => {
-  //     if (customerDetails.idNo && String(customerDetails.idNo).length > 5) {
-  //       fetchCustomerById(customerDetails.idNo);
-  //     }
-  //   }, 500);
-  //   return () => clearTimeout(timer);
-  // }, [customerDetails.idNo]);
-
   // Progress / Completed tabs
   useEffect(() => {
     const requiredCustomerFields = [
@@ -318,13 +295,7 @@ const NewCustomerStepper = () => {
       "suburb",
     ];
     const requiredServiceFields = ["serviceStreetAddress", "serviceCity"];
-    const requiredConnectionFields = [
-      "phase",
-      "connectionType",
-      // If you don't actually capture these two, remove them:
-      // "customerCategory",
-      // "tariffCatCode",
-    ];
+    const requiredConnectionFields = ["phase", "connectionType"];
     const requiredContactFields = ["contactName", "contactMobile"];
     const requiredDocumentUploadFields = [
       "idCopy",
@@ -356,11 +327,10 @@ const NewCustomerStepper = () => {
         `/online-applications/generate-tempId?mobile=${customerDetails.mobileNo}`,
         { responseType: "text" }
       );
-      const tempId = res.data; // e.g. "77240628025040"
+      const tempId = res.data;
       localStorage.setItem("tempId", tempId);
 
-      // Ensure legacy id is available for PUTs (matches your old server behavior)
-      const legacy = buildLegacyTempId(tempId); // -> "077240628025039"
+      const legacy = buildLegacyTempId(tempId);
       if (legacy) localStorage.setItem("passingTempId", legacy);
 
       return tempId;
@@ -378,17 +348,12 @@ const NewCustomerStepper = () => {
       const existingPassing = safeGet("passingTempId");
       const storedTempId = safeGet("tempId");
 
-      // Rebuild legacy id (what your backend expects for updates)
       const legacyId = buildLegacyTempId(storedTempId);
-
-      // Keep "passingTempId" in sync (mirrors your previous working flow)
-      if (legacyId) {
-        localStorage.setItem("passingTempId", legacyId);
-      }
+      if (legacyId) localStorage.setItem("passingTempId", legacyId);
 
       let response;
 
-      // NEW draft (no passing + no URL id) -> POST first
+      // NEW draft -> POST first
       if ((!existingPassing || existingPassing === "null") && !tempIdFromUrl) {
         const payload = {
           idNo: customerDetails.idNo,
@@ -406,21 +371,18 @@ const NewCustomerStepper = () => {
           preferredLanguage: customerDetails.preferredLanguage,
           personalCorporate: customerDetails.personalCorporate,
         };
+
         response = await api.post(`/online-applications`, payload);
 
-        // make sure we have both tempId and passingTempId set for later PUTs
+        // Ensure tempId is available for later steps
         const tmp = await generateTempId();
-        if (!tmp) {
-          console.warn("tempId not generated; PUTs may fail until it is.");
-        }
+        if (!tmp) console.warn("tempId not generated; PUTs may fail until it is.");
       } else {
-        // UPDATE existing draft -> PUT using URL tempId OR the legacy id we just computed
+        // UPDATE existing draft -> PUT
         const tempIdToUse =
           tempIdFromUrl || legacyId || existingPassing || resolveTempIdForPut(location);
 
-        if (!tempIdToUse) {
-          throw new Error("No tempId available for update.");
-        }
+        if (!tempIdToUse) throw new Error("No tempId available for update.");
 
         const payload = {
           tempId: tempIdToUse,
@@ -458,31 +420,20 @@ const NewCustomerStepper = () => {
       return;
     }
 
-    try {
-      const payload = {
-        neighboursAccNo: serviceLocationDetails.neighboursAccNo,
-        serviceStreetAddress: serviceLocationDetails.serviceStreetAddress,
-        serviceSuburb: serviceLocationDetails.serviceSuburb,
-        serviceCity: serviceLocationDetails.serviceCity,
-        servicePostalCode: serviceLocationDetails.servicePostalCode,
-        assessmentNo: serviceLocationDetails.assessmentNo,
-        ownership: serviceLocationDetails.ownership,
-        latitude: serviceLocationDetails.latitude,
-        longitude: serviceLocationDetails.longitude,
-        deptId: serviceLocationDetails.deptId,
-      };
+    const payload = {
+      neighboursAccNo: serviceLocationDetails.neighboursAccNo,
+      serviceStreetAddress: serviceLocationDetails.serviceStreetAddress,
+      serviceSuburb: serviceLocationDetails.serviceSuburb,
+      serviceCity: serviceLocationDetails.serviceCity,
+      servicePostalCode: serviceLocationDetails.servicePostalCode,
+      assessmentNo: serviceLocationDetails.assessmentNo,
+      ownership: serviceLocationDetails.ownership,
+      latitude: serviceLocationDetails.latitude,
+      longitude: serviceLocationDetails.longitude,
+      deptId: serviceLocationDetails.deptId,
+    };
 
-      const response = await api.put(`/online-applications/${tempIdToUse}`, payload);
-      console.log("Updated data:", serviceLocationDetails);
-      console.log("Backend response:", response?.data);
-    } catch (error) {
-      console.error("Error updating details:", error);
-      alert(
-        "Failed to update service location details. Error: " +
-          (error?.message || JSON.stringify(error))
-      );
-      throw error;
-    }
+    await api.put(`/online-applications/${tempIdToUse}`, payload);
   };
 
   const postContactPersonDetails = async () => {
@@ -492,27 +443,16 @@ const NewCustomerStepper = () => {
       return;
     }
 
-    try {
-      const payload = {
-        contactIdNo: contactPersonDetails.contactIdNo,
-        contactName: contactPersonDetails.contactName,
-        contactAddress: contactPersonDetails.contactAddress,
-        contactTelephone: contactPersonDetails.contactTelephone,
-        contactMobile: contactPersonDetails.contactMobile,
-        contactEmail: contactPersonDetails.contactEmail,
-      };
+    const payload = {
+      contactIdNo: contactPersonDetails.contactIdNo,
+      contactName: contactPersonDetails.contactName,
+      contactAddress: contactPersonDetails.contactAddress,
+      contactTelephone: contactPersonDetails.contactTelephone,
+      contactMobile: contactPersonDetails.contactMobile,
+      contactEmail: contactPersonDetails.contactEmail,
+    };
 
-      const response = await api.put(`/online-applications/${tempIdToUse}`, payload);
-      console.log("Updated data:", payload);
-      console.log("Backend response:", response?.data);
-    } catch (error) {
-      console.error("Error updating details:", error);
-      alert(
-        "Failed to update contact person details. Error: " +
-          (error?.message || JSON.stringify(error))
-      );
-      throw error;
-    }
+    await api.put(`/online-applications/${tempIdToUse}`, payload);
   };
 
   const postConnectionDetails = async () => {
@@ -522,58 +462,54 @@ const NewCustomerStepper = () => {
       return;
     }
 
-    try {
-      const payload = {
-        // Backend expects Boolean for phase in OnlineApplication
-        phase: connectionDetails.phase === 3 ? true : connectionDetails.phase === 1 ? false : undefined,
-        connectionType: connectionDetails.connectionType,
-        usageElectricity: connectionDetails.usageElectricity,
-        requestingTime: connectionDetails.requestingTime,
-        boundaryWall: connectionDetails.boundaryWall,
-        preAccountNo: connectionDetails.preAccountNo,
-      };
+    const payload = {
+      phase:
+        connectionDetails.phase === 3
+          ? true
+          : connectionDetails.phase === 1
+          ? false
+          : undefined,
+      connectionType: connectionDetails.connectionType,
+      usageElectricity: connectionDetails.usageElectricity,
+      requestingTime: connectionDetails.requestingTime,
+      boundaryWall: connectionDetails.boundaryWall,
+      preAccountNo: connectionDetails.preAccountNo,
+    };
 
-      await api.put(`/online-applications/${tempIdToUse}`, payload);
-      console.log("✔ Connection details updated:", payload);
-
-      if (customerDetails?.idNo) {
-        const cleanAccounts = accountNumbers
-          .map((acc) => acc.trim())
-          .filter((acc) => acc !== "");
-        if (cleanAccounts.length > 0) {
-          try {
-            const getResponse = await api.get(`/accounts/${customerDetails.idNo}`);
-            const existingAccounts = getResponse.data || [];
-            if (existingAccounts.length > 0) {
-              await api.put(`/accounts/${customerDetails.idNo}`, cleanAccounts);
-            } else {
-              await api.post(`/accounts/${customerDetails.idNo}`, cleanAccounts);
-            }
-          } catch (err) {
-            console.error("❌ Error saving account numbers:", err);
-            alert(
-              "Failed to save account numbers. Error: " +
-                (err?.message || JSON.stringify(err))
-            );
-            throw err;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("❌ Error updating details:", error);
-      alert(
-        "Failed to update connection details. Error: " +
-          (error?.message || JSON.stringify(error))
-      );
-    }
+    await api.put(`/online-applications/${tempIdToUse}`, payload);
   };
 
-  // handleDocumentUpload removed: uploads are now part of the single multipart /application call
+  // =========================
+  // REQUIRED DOCUMENT VALIDATION (FINAL GUARD)
+  // =========================
+  const validateRequiredDocuments = () => {
+    const missing = [];
+    if (!documentUpload.idCopy) missing.push("ID Copy");
+    if (!documentUpload.ownershipCertificate) missing.push("Ownership Certificate");
+    if (!documentUpload.gramaNiladhariCertificate)
+      missing.push("Grama Niladhari Certificate");
+
+    if (missing.length > 0) {
+      alert(
+        `Please upload all required documents before submitting.\n\nMissing:\n- ${missing.join(
+          "\n- "
+        )}`
+      );
+      return false;
+    }
+    return true;
+  };
 
   // Submit: single multipart POST /application with JSON + files
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+
+    // 🔐 FINAL document validation (cannot bypass)
+    if (!validateRequiredDocuments()) return;
+
     try {
-      // Prepare JSON payload for /application
+      setIsSubmitting(true);
+
       const formDataDto = {
         applicantDto: {
           idNo: customerDetails.idNo,
@@ -611,36 +547,42 @@ const NewCustomerStepper = () => {
           deptId: serviceLocationDetails.deptId,
           phase: connectionDetails.phase,
           connectionType: connectionDetails.connectionType,
-          customerCategory: connectionDetails.customerCategory, // include if captured
-          tariffCatCode: connectionDetails.tariffCatCode,       // include if captured
-          tariffCode: connectionDetails.tariffCode,             // include if captured
+          customerCategory: connectionDetails.customerCategory,
+          tariffCatCode: connectionDetails.tariffCatCode,
+          tariffCode: connectionDetails.tariffCode,
           customerType: serviceLocationDetails.customerType || "DOME",
         },
       };
-      // Resolve tempId used during the draft flow
+
       const tempIdToUse = resolveTempIdForPut(location);
       if (!tempIdToUse) {
         alert("Temporary ID not found. Please start the application again from step 1.");
         return;
       }
 
-      // Build multipart form: JSON blob + files + tempId
-  const multipart = new FormData();
-  const jsonBlob = new Blob([JSON.stringify(formDataDto)], { type: "application/json" });
-  // Must match @RequestPart("formData") on the server
-  multipart.append("formData", jsonBlob);
+      const multipart = new FormData();
+      const jsonBlob = new Blob([JSON.stringify(formDataDto)], {
+        type: "application/json",
+      });
+
+      multipart.append("formData", jsonBlob);
       multipart.append("tempId", tempIdToUse);
+
       if (documentUpload.idCopy) multipart.append("idCopy", documentUpload.idCopy);
-      if (documentUpload.ownershipCertificate) multipart.append("ownershipCertificate", documentUpload.ownershipCertificate);
-      if (documentUpload.gramaNiladhariCertificate) multipart.append("gramaNiladhariCertificate", documentUpload.gramaNiladhariCertificate);
+      if (documentUpload.ownershipCertificate)
+        multipart.append("ownershipCertificate", documentUpload.ownershipCertificate);
+      if (documentUpload.gramaNiladhariCertificate)
+        multipart.append("gramaNiladhariCertificate", documentUpload.gramaNiladhariCertificate);
       if (documentUpload.threephChartedEngineerCertificate)
-        multipart.append("threephChartedEngineerCertificate", documentUpload.threephChartedEngineerCertificate);
+        multipart.append(
+          "threephChartedEngineerCertificate",
+          documentUpload.threephChartedEngineerCertificate
+        );
 
       const appResponse = await api.post(`/application`, multipart, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      // Extract reference number robustly
       const data = appResponse?.data;
       let refNo = null;
       if (data && typeof data === "object") {
@@ -648,29 +590,29 @@ const NewCustomerStepper = () => {
       } else if (typeof data === "string") {
         refNo = data;
       }
+
       if (!refNo) {
         console.error("No ref number in /application response:", data);
         alert("We couldn't get your reference number. Please try again.");
         return;
       }
 
-      // Store + navigate to success
       sessionStorage.setItem("lastApplicationNo", refNo);
       sessionStorage.setItem(
         "lastCustomerName",
         customerDetails.fullName || contactPersonDetails.contactName || ""
       );
-      alert(`Application submitted successfully! Ref: ${refNo}`);
+
       history.push("/success", {
         applicationNo: refNo,
         customerName:
           customerDetails.fullName || contactPersonDetails.contactName || "",
       });
     } catch (error) {
-      alert(
-        "Submission failed: " + (error?.response?.data?.error || error.message)
-      );
+      alert("Submission failed: " + (error?.response?.data?.error || error.message));
       console.error(error);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -683,6 +625,7 @@ const NewCustomerStepper = () => {
           handleChange={handleCustomerDetailsChange}
           setFormData={setCustomerDetails}
           customerExists={customerExists}
+          fetchCustomerById={fetchCustomerById}
         />
       ),
     },
@@ -706,6 +649,7 @@ const NewCustomerStepper = () => {
           customerData={customerDetails}
           accountNumbers={accountNumbers}
           setAccountNumbers={setAccountNumbers}
+          serviceArea={serviceLocationDetails.area}
         />
       ),
     },
@@ -735,10 +679,16 @@ const NewCustomerStepper = () => {
     const tempId = params.get("tempId");
     if (tempId) {
       localStorage.setItem("passingTempId", tempId);
+
+      // Existing app: skip OTP for this session
+      setOtpVerified(true);
+      sessionStorage.setItem("otpVerified", "true");
+
       api
         .get(`/online-applications/${tempId}`)
         .then((res) => {
           const data = res.data;
+
           setCustomerDetails({
             idNo: data.idNo || "",
             personalCorporate: data.personalCorporate || "",
@@ -755,6 +705,7 @@ const NewCustomerStepper = () => {
             email: data.email || "",
             preferredLanguage: data.preferredLanguage || "",
           });
+
           setContactPersonDetails({
             contactIdNo: data.contactIdNo || "",
             contactName: data.contactName || "",
@@ -764,6 +715,7 @@ const NewCustomerStepper = () => {
             contactEmail: data.contactEmail || "",
             deptId: data.deptId || "",
           });
+
           setServiceLocationDetails((prev) => ({
             ...prev,
             neighboursAccNo: data.neighboursAccNo || "",
@@ -778,21 +730,18 @@ const NewCustomerStepper = () => {
             longitude: data.longitude || "",
             latitude: data.latitude || "",
           }));
-          // Normalize types coming from backend so radios render correctly
+
           const normalizePhase = (rawPhase, rawConnType) => {
-            // Accept numbers, strings, booleans, or Y/N
             if (rawPhase === 3 || rawPhase === "3") return 3;
             if (rawPhase === 1 || rawPhase === "1") return 1;
-            if (rawPhase === true || rawPhase === "true" || rawPhase === "Y") return 3; // three-phase
-            if (rawPhase === false || rawPhase === "false" || rawPhase === "N") return 1; // single-phase
-            // Fallback inference: 60A implies 3ph
+            if (rawPhase === true || rawPhase === "true" || rawPhase === "Y") return 3;
+            if (rawPhase === false || rawPhase === "false" || rawPhase === "N") return 1;
             const nConn = Number(rawConnType);
             if (!Number.isNaN(nConn) && nConn === 60) return 3;
-            return ""; // unknown -> leave unselected
+            return "";
           };
 
           const normalizeConnType = (raw) => {
-            // Ensure it's a string '30' | '60' for the radio checks
             if (raw == null || raw === "") return "";
             const n = Number(raw);
             if (!Number.isNaN(n)) return String(n);
@@ -847,47 +796,45 @@ const NewCustomerStepper = () => {
         if (!customerDetails.preferredLanguage) missing.push("Preferred Language");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required customer details.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required customer details.\nMissing: ${missing.join(", ")}`);
           return;
         }
 
         await postCustomerDetails();
 
-        if (!tempIdFromUrl) {
+        // ✅ Existing app: no OTP
+        if (tempIdFromUrl) {
+          setActiveTab((prev) => prev + 1);
+          return;
+        }
+
+        // ✅ NEW app: OTP only ONCE per session
+        if (!otpVerified) {
           const tmp = await generateTempId();
           if (!tmp) {
             alert("Could not generate a temporary ID. Try again.");
             return;
           }
+
+          const sent = await sendOtp(customerDetails.mobileNo);
+          if (sent) return; // wait for OTP modal
         }
 
-        // 🔐 OTP for NEW application only
-        if (!tempIdFromUrl) {
-          const sent = await sendOtp(customerDetails.mobileNo);
-          if (sent) {
-            return; // Wait until user verifies
-          }
-        }
+        // If already verified, just continue
+        setActiveTab((prev) => prev + 1);
+        return;
       } else if (activeTab === 1) {
         const missing = [];
-        // if (!serviceLocationDetails.assessmentNo) missing.push("Assessment No");
         if (!serviceLocationDetails.deptId) missing.push("Department");
-        if (!serviceLocationDetails.serviceStreetAddress)
-          missing.push("Service Street Address");
+        if (!serviceLocationDetails.serviceStreetAddress) missing.push("Service Street Address");
         if (!serviceLocationDetails.serviceSuburb) missing.push("Service Suburb");
         if (!serviceLocationDetails.serviceCity) missing.push("Service City");
         if (!serviceLocationDetails.ownership) missing.push("Ownership");
         if (!serviceLocationDetails.latitude) missing.push("Latitude");
         if (!serviceLocationDetails.longitude) missing.push("Longitude");
-        // if (!serviceLocationDetails.neighboursAccNo)
-        //   missing.push("Neighbour's Account No");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required service location details.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required service location details.\nMissing: ${missing.join(", ")}`);
           return;
         }
 
@@ -896,15 +843,12 @@ const NewCustomerStepper = () => {
         const missing = [];
         if (!connectionDetails.phase) missing.push("Phase");
         if (!connectionDetails.connectionType) missing.push("Connection Type");
-        if (!connectionDetails.usageElectricity)
-          missing.push("Usage of Electricity");
+        if (!connectionDetails.usageElectricity) missing.push("Usage of Electricity");
         if (!connectionDetails.requestingTime) missing.push("Requesting Time");
         if (!connectionDetails.boundaryWall) missing.push("Boundary Wall");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required connection details.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required connection details.\nMissing: ${missing.join(", ")}`);
           return;
         }
 
@@ -914,14 +858,10 @@ const NewCustomerStepper = () => {
         if (!contactPersonDetails.contactName) missing.push("Contact Name");
         if (!contactPersonDetails.contactIdNo) missing.push("Contact ID No");
         if (!contactPersonDetails.contactAddress) missing.push("Contact Address");
-        // if (!contactPersonDetails.contactTelephone)
-        //   missing.push("Contact Telephone");
         if (!contactPersonDetails.contactMobile) missing.push("Contact Mobile");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required contact person details.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required contact person details.\nMissing: ${missing.join(", ")}`);
           return;
         }
 
@@ -929,15 +869,11 @@ const NewCustomerStepper = () => {
       } else if (activeTab === 4) {
         const missing = [];
         if (!documentUpload.idCopy) missing.push("ID Copy");
-        if (!documentUpload.ownershipCertificate)
-          missing.push("Ownership Certificate");
-        if (!documentUpload.gramaNiladhariCertificate)
-          missing.push("Grama Niladhari Certificate");
+        if (!documentUpload.ownershipCertificate) missing.push("Ownership Certificate");
+        if (!documentUpload.gramaNiladhariCertificate) missing.push("Grama Niladhari Certificate");
 
         if (missing.length > 0) {
-          alert(
-            `Please fill all required document upload fields.\nMissing: ${missing.join(", ")}`
-          );
+          alert(`Please fill all required document upload fields.\nMissing: ${missing.join(", ")}`);
           return;
         }
       }
@@ -950,9 +886,13 @@ const NewCustomerStepper = () => {
   };
 
   const handlePrev = () => {
-    if (activeTab > 0) {
-      setActiveTab(activeTab - 1);
-    }
+    if (activeTab > 0) setActiveTab(activeTab - 1);
+  };
+
+  const openAgreementModal = () => {
+    // ✅ do not allow opening modal unless mandatory docs exist
+    if (!validateRequiredDocuments()) return;
+    setShowAgreementModal(true);
   };
 
   return (
@@ -969,10 +909,7 @@ const NewCustomerStepper = () => {
                 {/* Stepper */}
                 <div className="flex justify-between items-center mb-4 mt-4 relative w-full">
                   {tabs.map((tab, index) => (
-                    <div
-                      key={index}
-                      className="relative flex-1 flex flex-col items-center"
-                    >
+                    <div key={index} className="relative flex-1 flex flex-col items-center">
                       <div
                         className={`relative z-10 w-10 h-10 flex items-center justify-center rounded-full border-2 transition-all ${
                           index === activeTab
@@ -1008,6 +945,7 @@ const NewCustomerStepper = () => {
                         setFormData={setConnectionDetails}
                         accountNumbers={accountNumbers}
                         setAccountNumbers={setAccountNumbers}
+                        serviceArea={serviceLocationDetails.area}
                       />
                     ) : activeTab === 1 ? (
                       <ServiceLocationDetails
@@ -1038,11 +976,12 @@ const NewCustomerStepper = () => {
                             }}
                             onKeyDown={async (e) => {
                               if (e.key === "Enter" && otp.length >= 4 && !isVerifyingOtp) {
-                                const ok = await validateOtp(
-                                  customerDetails.mobileNo,
-                                  otp
-                                );
+                                const ok = await validateOtp(customerDetails.mobileNo, otp);
                                 if (ok) {
+                                  // ✅ mark verified so it won't ask again
+                                  setOtpVerified(true);
+                                  sessionStorage.setItem("otpVerified", "true");
+
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -1052,22 +991,19 @@ const NewCustomerStepper = () => {
                             className="otp-input"
                           />
 
-                          {otpError && (
-                            <div style={{ color: "red", marginTop: 6 }}>
-                              {otpError}
-                            </div>
-                          )}
+                          {otpError && <div style={{ color: "red", marginTop: 6 }}>{otpError}</div>}
 
                           <div className="otp-actions">
                             <button
                               className="otp-verify-btn"
                               disabled={otp.length < 4 || isVerifyingOtp}
                               onClick={async () => {
-                                const ok = await validateOtp(
-                                  customerDetails.mobileNo,
-                                  otp
-                                );
+                                const ok = await validateOtp(customerDetails.mobileNo, otp);
                                 if (ok) {
+                                  // ✅ mark verified so it won't ask again
+                                  setOtpVerified(true);
+                                  sessionStorage.setItem("otpVerified", "true");
+
                                   setShowOtpModal(false);
                                   setActiveTab((prev) => prev + 1);
                                 }
@@ -1082,11 +1018,7 @@ const NewCustomerStepper = () => {
                               onClick={async () => {
                                 await sendOtp(customerDetails.mobileNo);
                               }}
-                              title={
-                                otpTimer > 0
-                                  ? `You can resend in ${otpTimer}s`
-                                  : "Resend OTP"
-                              }
+                              title={otpTimer > 0 ? `You can resend in ${otpTimer}s` : "Resend OTP"}
                             >
                               {isSendingOtp
                                 ? "Sending..."
@@ -1110,6 +1042,59 @@ const NewCustomerStepper = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* Agreement Confirm Modal */}
+                    {showAgreementModal && (
+                      <div className="agreement-overlay">
+                        <div className="agreement-modal">
+                          <div className="agreement-header">
+                            <h3>Declaration / Agreement</h3>
+                          </div>
+
+                          <div className="agreement-body">
+                            <p>
+                              I assure that all the information given above is true and correct.
+                              If it is later proved that false information or forged documents
+                              have been submitted, I will consciously certify that the agreement
+                              signed with the Ceylon Electricity Board will be terminated and my
+                              Electricity supply shall be disconnected and that the Ceylon
+                              Electricity Board will be fully relieved of all liability in that
+                              regard.
+                            </p>
+
+                            <p>
+                              I agree to pay the full cost of change of power line route which have
+                              laid across someone else&apos;s land / house / property in case of any
+                              objection. I also agree to use electricity without exceeding the
+                              contract demand. I hereby request to issue an estimate for the
+                              supply of electricity to the above premises.
+                            </p>
+                          </div>
+
+                          <div className="agreement-actions">
+                            <button
+                              className="agreement-confirm"
+                              disabled={isSubmitting}
+                              onClick={async () => {
+                                setShowAgreementModal(false);
+                                await handleSubmit();
+                              }}
+                            >
+                              {isSubmitting ? "Submitting..." : "Confirm & Submit"}
+                            </button>
+
+                            <button
+                              className="agreement-cancel"
+                              disabled={isSubmitting}
+                              onClick={() => setShowAgreementModal(false)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                   </div>
                 </div>
 
@@ -1140,10 +1125,12 @@ const NewCustomerStepper = () => {
                       </button>
                     ) : (
                       <button
-                        onClick={handleSubmit}
+                        onClick={openAgreementModal}
+                        disabled={isSubmitting}
                         className="bg-green-500 text-white font-bold text-xs px-6 py-3 rounded shadow hover:shadow-md transition duration-150"
+                        style={{ opacity: isSubmitting ? 0.7 : 1 }}
                       >
-                        Submit
+                        {isSubmitting ? "Submitting..." : "Submit"}
                       </button>
                     )}
                   </div>
@@ -1154,14 +1141,14 @@ const NewCustomerStepper = () => {
         </div>
       </div>
 
-      {/* Minimal inline styles for OTP modal */}
+      {/* Minimal inline styles for OTP modal (reused for agreement modal too) */}
       <style>{`
         .otp-modal {
           position: fixed; inset: 0; background: rgba(0,0,0,0.5);
           display: flex; align-items: center; justify-content: center; z-index: 9999;
         }
         .otp-card {
-          background: #fff; padding: 20px; border-radius: 12px; width: 400px;
+          background: #fff; padding: 20px; border-radius: 12px; width: 440px;
           box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
         .otp-title { margin: 0 0 10px 0; font-weight: 600; }
@@ -1172,10 +1159,10 @@ const NewCustomerStepper = () => {
         .otp-actions {
           margin-top: 12px; display: flex; gap: 8px; flex-wrap: nowrap; justify-content: space-between;
         }
-        .otp-verify-btn { background: #2563eb; color: #fff; }
-        .otp-resend-btn { background: #f59e0b; color: #111; }
-        .otp-cancel-btn { background: #e5e7eb; color: #111;  }
-        .otp-verify-btn:disabled, .otp-resend-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .otp-verify-btn { background: #2563eb; color: #fff; padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; }
+        .otp-resend-btn { background: #f59e0b; color: #111; padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; }
+        .otp-cancel-btn { background: #e5e7eb; color: #111; padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; }
+        .otp-verify-btn:disabled, .otp-resend-btn:disabled, .otp-cancel-btn:disabled { opacity: 0.6; cursor: not-allowed; }
       `}</style>
     </div>
   );

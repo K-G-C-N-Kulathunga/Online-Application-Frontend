@@ -525,3 +525,154 @@
 .full-lading-page-option{
   margin-right: 11rem;
 }
+
+/* CSS for account number alignment */
+.account-numbers-section {
+  width: 100%;
+}
+
+.account-numbers-header {
+  margin-bottom: 16px;
+}
+
+.account-numbers-inputs-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.account-numbers-labels-row {
+  display: flex;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.account-numbers-inputs-row {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.account-number-input-group {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Alternative simpler CSS if you prefer inline styles */
+.form-box-inner .form-label {
+  display: block;
+  margin-bottom: 16px;
+}
+
+/* Or even simpler - just modify the existing structure */
+.account-numbers-inputs-row .form-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Overlay */
+.agreement-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+/* Modal */
+.agreement-modal {
+  background: #ffffff;
+  width: 520px;
+  max-width: 95%;
+  border-radius: 14px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
+  animation: agreementFadeIn 0.25s ease-out;
+  overflow: hidden;
+}
+
+/* Header */
+.agreement-header {
+  background: linear-gradient(135deg, #7d0000, #a00000);
+  padding: 16px 20px;
+}
+
+.agreement-header h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Body */
+.agreement-body {
+  padding: 18px 22px;
+  font-size: 14px;
+  line-height: 1.75;
+  color: #333;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.agreement-body p {
+  margin-bottom: 14px;
+}
+
+/* Actions */
+.agreement-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+}
+
+/* Buttons */
+.agreement-confirm {
+  flex: 1;
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.agreement-confirm:hover {
+  background: #15803d;
+}
+
+.agreement-cancel {
+  flex: 1;
+  background: #e5e7eb;
+  color: #111;
+  border: none;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.agreement-confirm:disabled,
+.agreement-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Animation */
+@keyframes agreementFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}

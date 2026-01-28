@@ -342,7 +342,7 @@ const ServiceLocationDetails = ({
           </div>
           <div className="form-group">
             <label className="form-label required" title="Nearet Counsumer Service Center">
-              Nearest CSC
+              Nearest Consumer Service Center
             </label>
             <select
                 id="csc"
@@ -353,7 +353,7 @@ const ServiceLocationDetails = ({
                 disabled={loadingCscs || !formData?.area}
                 required
             >
-              <option value="">Select CSC</option>
+              <option value="">Select Consumer Service Center</option>
               {cscs.map((csc) => (
                   <option key={csc.deptId} value={csc.deptId}>
                     {csc.deptFullName}
@@ -424,22 +424,7 @@ const ServiceLocationDetails = ({
 
           {/* street name and house/building no */}
           <div className="form-box-inner">
-            <div className="form-group">
-              <label className="form-label required">Street Name:</label>
-              <input
-                  type="text"
-                  id="serviceStreetAddress"
-                  name="serviceStreetAddress"
-                  className="form-input"
-                  // value={localFormData.serviceStreetAddress}
-                  // onChange={handleLocalFieldChange}
-                  // required
-                  value={manualData.serviceStreetAddress}
-                  onChange={(e) =>
-                      setManualData({ ...manualData, serviceStreetAddress: e.target.value })
-                  }
-              />
-            </div>
+            
             <div className="form-group">
               <label className="form-label required">House/Building No:</label>
               <input
@@ -455,6 +440,22 @@ const ServiceLocationDetails = ({
                   value={manualData.serviceSuburb}
                   onChange={(e) =>
                       setManualData({ ...manualData, serviceSuburb: e.target.value })
+                  }
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label required">Street Name:</label>
+              <input
+                  type="text"
+                  id="serviceStreetAddress"
+                  name="serviceStreetAddress"
+                  className="form-input"
+                  // value={localFormData.serviceStreetAddress}
+                  // onChange={handleLocalFieldChange}
+                  // required
+                  value={manualData.serviceStreetAddress}
+                  onChange={(e) =>
+                      setManualData({ ...manualData, serviceStreetAddress: e.target.value })
                   }
               />
             </div>
