@@ -186,7 +186,6 @@ const DocumentUpload = ({ formData, handleChange }) => {
       label: (
         <DocLabel
           title="Chartered Engineer Certificate"
-          required
           description="Required only for three-phase electricity connections"
         />
       ),
@@ -197,105 +196,117 @@ const DocumentUpload = ({ formData, handleChange }) => {
 
   return (
     <div className="form-box">
+      <div style={{ 
+        marginBottom: '24px', 
+        padding: '12px 16px', 
+        backgroundColor: '#eff6ff', // Light blue background
+        border: '1px solid #dbeafe', // Soft blue border
+        borderLeft: '4px solid #2563eb', // Strong blue accent
+        borderRadius: '6px',
+        fontSize: '13px',
+        color: '#1e40af', // Dark blue text
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        <span style={{ fontSize: '16px' }}>ℹ️</span>
+        <span>
+          <strong>Note:</strong> Please upload <strong>PDF or JPEG</strong> files only. 
+          Maximum file size: <strong>2MB</strong>.
+        </span>
+      </div>
       {rows.map((r) => {
-        const file = formData?.[r.name];
-        const shownName = truncateFileName(file?.name || "", 30);
+  const file = formData?.[r.name];
+  const shownName = truncateFileName(file?.name || "", 30);
 
-        return (
-          <div key={r.name} className="mb-4 flex items-center justify-between gap-4">
-            <label className="form-label w-1/2">
-              {r.label}
-            </label>
+  return (
+    // 1. Remove flex-items-center so error doesn't force label to the middle vertically
+    <div key={r.name} className="mb-0.5 flex justify-between gap-4">
+      
+      {/* LEFT SIDE: Label */}
+      <label className="form-label w-1/2">
+        {r.label}
+      </label>
 
-            {/* Right side controls (fixed width so it never moves) */}
-            <div
-              className="w-1/2"
-              style={{
-                display: "flex",
-                justifyContent: "flex-end",
-              }}
-            >
-              {/* Hidden native input */}
-              <input
-                ref={(el) => (inputRefs.current[r.name] = el)}
-                type="file"
-                name={r.name}
-                accept={ACCEPT}
-                onChange={handleFileChange}
-                style={{ display: "none" }}
-              />
+      {/* RIGHT SIDE: Controls + Error Column */}
+      <div className="w-1/2 flex flex-col items-end">
+        
+        {/* Input & Buttons Container */}
+        <div style={{
+          width: 420,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          justifyContent: "flex-end",
+        }}>
+          <input
+            ref={(el) => (inputRefs.current[r.name] = el)}
+            type="file"
+            name={r.name}
+            accept={ACCEPT}
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+          />
 
-              {/* Fixed-size container to prevent shifting */}
-              <div
-                style={{
-                  width: 420, // ✅ FIXED WIDTH (change if you want)
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  justifyContent: "flex-end",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => onPick(r.name)}
-                  style={{
-                    width: 110, // ✅ fixed button width
-                    border: "1px solid #aaa",
-                    background: "#f3f4f6",
-                    padding: "6px 10px",
-                    borderRadius: 4,
-                    cursor: "pointer",
-                    whiteSpace: "nowrap",
-                    textAlign: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  Choose File
-                </button>
+          <button
+            type="button"
+            onClick={() => onPick(r.name)}
+            style={{
+              width: 110,
+              border: "1px solid #aaa",
+              background: "#f3f4f6",
+              padding: "6px 10px",
+              borderRadius: 4,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              textAlign: "center",
+              flexShrink: 0,
+            }}
+          >
+            Choose File
+          </button>
 
-                {/* filename area fixed width */}
-                <button
-                  type="button"
-                  onClick={() => downloadSelected(r.name)}
-                  disabled={!file}
-                  title={file ? file.name : "No file chosen"}
-                  style={{
-                    width: 290, // ✅ fixed filename width
-                    border: "none",
-                    background: "transparent",
-                    padding: 0,
-                    cursor: file ? "pointer" : "default",
-                    color: file ? "#2563eb" : "#6b7280",
-                    textDecoration: file ? "underline" : "none",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    textAlign: "left",
-                    flexShrink: 0,
-                  }}
-                >
-                  {shownName}
-                </button>
-              </div>
-            </div>
+          <button
+            type="button"
+            onClick={() => downloadSelected(r.name)}
+            disabled={!file}
+            title={file ? file.name : "No file chosen"}
+            style={{
+              width: 290,
+              border: "none",
+              background: "transparent",
+              padding: 0,
+              cursor: file ? "pointer" : "default",
+              color: file ? "#2563eb" : "#6b7280",
+              textDecoration: file ? "underline" : "none",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              textAlign: "left",
+              flexShrink: 0,
+            }}
+          >
+            {shownName}
+          </button>
+        </div>
 
-            {/* Error under row */}
-            {errors[r.name] ? (
-              <div
-                style={{
-                  width: "100%",
-                  marginLeft: "50%",
-                  marginTop: 6,
-                  color: "red",
-                  fontSize: 12,
-                }}
-              >
-                {errors[r.name]}
-              </div>
-            ) : null}
+        {/* ERROR MESSAGE: Now correctly placed under the buttons */}
+        {errors[r.name] && (
+          <div style={{
+            width: 420, // Match the button container width
+            marginTop: 4,
+            color: "#dc2626", // Professional red
+            fontSize: "12px",
+            textAlign: "left", // Aligns with the "No file chosen" text
+            fontWeight: "500"
+          }}>
+            {errors[r.name]}
           </div>
-        );
-      })}
+        )}
+      </div>
+    </div>
+  );
+})}
     </div>
   );
 };

@@ -603,8 +603,6 @@ const NewCustomerStepper = () => {
         customerDetails.fullName || contactPersonDetails.contactName || ""
       );
 
-      alert(`Application submitted successfully! Ref: ${refNo}`);
-
       history.push("/success", {
         applicationNo: refNo,
         customerName:

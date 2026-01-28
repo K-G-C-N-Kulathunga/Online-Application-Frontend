@@ -106,3 +106,37 @@ body {
   transform: translateY(1px);
   box-shadow: 0 4px 8px rgba(125, 0, 0, 0.4);
 }
+
+.button-group {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 15px; /* Adds space between buttons */
+}
+
+.download-btn {
+  margin-top: 25px;
+  background: linear-gradient(135deg, #7d0000 0%, #ff0000 100%); /* red gradient */
+  color: white;
+  padding: 12px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  box-shadow: 0 6px 12px rgba(125, 0, 0, 0.4);
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+}
+
+.download-btn:hover {
+  background: white;
+  color: #7d0000;
+  box-shadow: 0 8px 16px rgba(125, 0, 0, 0.6);
+  transform: translateY(-2px);
+}
+
+.download-btn:active {
+  transform: translateY(1px);
+  box-shadow: 0 4px 8px rgba(125, 0, 0, 0.4);
+}
